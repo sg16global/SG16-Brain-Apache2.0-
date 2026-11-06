@@ -146,7 +146,9 @@ class ApiTests(ServerFixture):
     def test_ingest_rejects_oversized_body(self) -> None:
         # The server refuses an oversized body and drops the socket before the
         # client finishes pushing bytes.  Either an explicit 413 or a
-        # connection-level abort (broken pipe / reset) is a correct rejection.
+        # connection-level abort is a correct rejection: broken pipe or reset
+        # on Linux/macOS, and also "connection aborted" (WinError 10053) on
+        # Windows. ConnectionError is the common base class of all three.
         big = json.dumps({"text": "x" * (6 * 1024 * 1024)}).encode("utf-8")
         conn = http.client.HTTPConnection(self.host, self.port, timeout=10)
         try:
@@ -159,7 +161,7 @@ class ApiTests(ServerFixture):
             response = conn.getresponse()
             status = response.status
             response.read()
-        except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected):
+        except (ConnectionError, http.client.RemoteDisconnected):
             return
         finally:
             conn.close()

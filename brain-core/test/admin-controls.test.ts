@@ -153,6 +153,19 @@ test("API key switch: operator only, and bad input is refused", async () => {
   assert.equal((await send(deps, "/api/admin/project-control", op, { id, state: "maybe" })).status, 400);
 });
 
+test("a key that does not work gets a key error on the chat endpoint, not the visitor's sign-in note", async () => {
+  const { deps } = setup();
+  for (const bad of ["sg16_" + "x".repeat(40), "sg16p_eyJ2IjoxfQ.forged"]) {
+    const res = await designCompatRoute(
+      new Request("https://x/api/brain", { method: "POST", headers: { authorization: `Bearer ${bad}`, "content-type": "application/json" }, body: JSON.stringify({ message: "hi" }) }),
+      "/api/brain",
+      deps,
+    );
+    assert.equal(res!.status, 403, bad.slice(0, 6));
+    assert.equal(((await res!.json()) as { keyOff: boolean }).keyOff, true);
+  }
+});
+
 // ---- BRAIN POWER ---------------------------------------------------------------------
 
 test("BRAIN POWER: the operator reads and flips it; visitors cannot", async () => {

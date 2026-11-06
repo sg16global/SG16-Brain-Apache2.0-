@@ -22,4 +22,10 @@ test("callTokens: host counts first, a conservative estimate otherwise, never ze
   assert.equal(callTokens({ prompt: 40, completion: 2 }, 0, 0), 42);
   assert.equal(callTokens({}, 400, 40), 110);
   assert.equal(callTokens({}, 0, 0), 1);
+  // a part the host leaves out is estimated; the part it reports is exact
+  assert.equal(callTokens({ completion: 50 }, 400, 999), 150, "cached prompt: 400/4 estimated + 50 reported");
+  assert.equal(callTokens({ prompt: 300 }, 0, 41), 311, "300 reported + ceil(41/4) estimated");
+  assert.equal(callTokens({ prompt: 0, completion: 0 }, 0, 0), 1, "never zero");
+  assert.equal(callTokens({ prompt: -3, completion: "x" }, 8, 8), 4, "nonsense counts fall back to the estimate");
+  assert.equal(callTokens({ prompt: null, completion: 7 }, 12, 0), 10);
 });

@@ -1,9 +1,11 @@
 // SG16 — Brain Robo, the homepage guide (owner request 2026-11-06).
 //
 // Replaces the blue globe on the right of the hero with the SG16 Brain Robo.
-// 2026-11-06 (owner's video): the robot is the owner's full-body robot video,
-// recoloured to the red stage (eyes stay cyan) with SG16 / BRAIN ROBO on its
-// chest: /images/sg16-robo.mp4 (a seamless 4.6 s loop, muted) with
+// 2026-11-06 (owner's video): the robot is the owner's full-body robot video
+// in the site's RED-BLACK NEON (owner request): glossy black body, red neon
+// eyes, visor, ears and outline, SG16 / BRAIN ROBO in red neon on its chest,
+// on a dark red stage that fades to black: /images/sg16-robo.mp4 (a 10 s
+// forward-and-back loop with no seam, muted) with
 // /images/sg16-robo.jpg as its still (slow connections, reduced motion).
 // On screens 1280 px and wider the robot stands in the open stage area RIGHT
 // of the seal (never touching it), as large as that space allows; layout()

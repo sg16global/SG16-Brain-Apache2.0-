@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Copy, KeyRound, ShieldCheck, Terminal } from "lucide-react";
 import Link from "next/link";
 import { SiteChrome } from "@/components/chrome/SiteChrome";
@@ -11,9 +11,14 @@ import { Panel } from "@/components/ui/Panel";
 // the operator's own projects use signed project keys that are created in the admin console and
 // never stored. There is nothing to sign up for here, and nothing about callers is kept.
 
+// the page's address never changes while it is open: nothing to subscribe to
+const noSubscribe = () => () => {};
+
 export default function ApiAccessPage() {
   const [copied, setCopied] = useState(false);
-  const origin = typeof window === "undefined" ? "https://mistralbrain.com" : window.location.origin;
+  // The same value while React hydrates the pre-built page (no mismatch, no
+  // React #418), then the address the visitor really is on.
+  const origin = useSyncExternalStore(noSubscribe, () => window.location.origin, () => "https://mistralbrain.com");
   const curl = `curl -X POST ${origin}/api/brain \\
   -H "Content-Type: application/json" \\
   -d '{"message":"Hello SG16"}'`;

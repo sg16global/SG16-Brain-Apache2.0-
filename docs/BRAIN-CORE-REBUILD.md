@@ -15,7 +15,7 @@ one-at-a-time queue discipline. Code: `brain-core/`. This is the runbook.
                                                 │ semaphore = 1, FIFO, lease expiry
                                                 │ Cloudflare Tunnel + Access service token
                                                 ▼
-                                   VPS (24 GB): Ollama/llama.cpp, ONE brain:
+                                   brain server (16 GB+): Ollama/llama.cpp, ONE brain:
                                    SG16 Brain Q4_K_M (~7.5 GB GGUF, 12B),
                                    saiftechglobal/sg16-brain:q4_k_m,
                                    bound to 127.0.0.1, ctx 8192, zero open ports
@@ -24,7 +24,7 @@ one-at-a-time queue discipline. Code: `brain-core/`. This is the runbook.
                                    (no third-party AI API exists in this system)
 ```
 
-RAM budget on the 24 GB VPS: ~7.5 GB weights (SG16 Brain, Q4_K_M) + ~1.3 GB
+RAM budget on a 16 GB server (e.g. OVH b3-16): ~7.5 GB weights (SG16 Brain, Q4_K_M) + ~1.3 GB
 KV cache (8K ctx) + ~2 GB OS/runtime ≈ 11 GB, with headroom. There is exactly
 one brain (OLLAMA_MAX_LOADED_MODELS=1, OLLAMA_KEEP_ALIVE=30m, never -1). Its
 weights come from the sg16-brain-Q4_K_M.gguf file and are registered with
@@ -104,7 +104,7 @@ new model writes a language badly, that becomes visible instead of masked.
 
 ## Integration order (exact)
 
-1. **VPS — model server** (as root, on the 24 GB box):
+1. **Brain server — model server** (as root, on the 16 GB+ box):
    ```bash
    GGUF_PATH=/root/sg16-brain-Q4_K_M.gguf MODE=ollama MODEL_PORT=8081 bash scripts/vps-setup-model.sh
    ```

@@ -25,9 +25,10 @@ export function balanceOf(used: number, allowance: number): TokenBalance {
   return { allowance, used: spent, remaining: Math.max(0, allowance - spent) };
 }
 
-/** Tokens one model call cost. Uses the host's own counts; when a host does
- * not report them, falls back to a conservative estimate (~4 chars/token) so
- * a free answer is never metered as zero. */
+/** Tokens one model call cost: prompt + answer. Each part uses the host's own
+ * count when it reports one; a part it does not report (Ollama leaves out
+ * prompt_eval_count when the whole prompt came from its cache) is estimated
+ * at ~4 characters per token, so a free answer is never metered as zero. */
 export function callTokens(
   reported: { prompt?: unknown; completion?: unknown; total?: unknown },
   promptChars: number,
@@ -35,10 +36,9 @@ export function callTokens(
 ): number {
   const total = Number(reported.total);
   if (Number.isSafeInteger(total) && total > 0) return total;
-  const prompt = Number(reported.prompt);
-  const completion = Number(reported.completion);
-  if (Number.isSafeInteger(prompt) && Number.isSafeInteger(completion) && prompt >= 0 && completion >= 0 && prompt + completion > 0) {
-    return prompt + completion;
-  }
-  return Math.max(1, Math.ceil((promptChars + answerChars) / 4));
+  const count = (v: unknown, chars: number) => {
+    const n = Number(v);
+    return v !== undefined && v !== null && Number.isSafeInteger(n) && n >= 0 ? n : Math.ceil(Math.max(0, chars) / 4);
+  };
+  return Math.max(1, count(reported.prompt, promptChars) + count(reported.completion, answerChars));
 }

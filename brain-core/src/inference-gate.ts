@@ -17,7 +17,9 @@ export interface QueueConfig {
 // 180s; 240s leaves headroom. Waiters poll every 200ms; one silent for 10s
 // has gone away (client disconnected) and must not hold the head of the
 // queue until its deadline.
-export const DEFAULT_QUEUE_CONFIG: QueueConfig = { waitBudgetMs: 45000, leaseMs: 240000, staleMs: 10000 };
+// leaseMs must outlast the longest legitimate hold: a draft, its one retry and
+// the optional self-check, each up to INFERENCE_TIMEOUT_MS (95 s): 3 x 95 = 285 s.
+export const DEFAULT_QUEUE_CONFIG: QueueConfig = { waitBudgetMs: 45000, leaseMs: 300000, staleMs: 10000 };
 
 interface Waiting {
   id: number;

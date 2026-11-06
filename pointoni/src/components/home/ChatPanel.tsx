@@ -160,6 +160,7 @@ export function ChatPanel({
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restores the saved chat from device storage, which exists only after hydration
     if (initialSessionId) loadSession(initialSessionId);
   }, [initialSessionId, loadSession]);
 
@@ -193,6 +194,7 @@ export function ChatPanel({
     setShowSuggestions(false);
     setInput("");
     const history = historyFromMessages(messages);
+    // eslint-disable-next-line react-hooks/purity -- inside the async send() handler, not during render
     const tempId = `temp-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
@@ -242,6 +244,7 @@ export function ChatPanel({
         data = (await res.json()) as ChatReply;
         if (!res.ok) {
           if (res.status === 429 && data.retryAt) {
+            // eslint-disable-next-line react-hooks/purity -- inside the async send() handler, not during render
             const waitSec = Math.max(1, Math.ceil((Number(data.retryAt) - Date.now()) / 1000));
             throw new Error(
               `${data.error || "Fair-use pause active."} You can try again in about ${waitSec}s. Your text was kept in the composer history view.`,

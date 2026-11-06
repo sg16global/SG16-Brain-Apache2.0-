@@ -50,6 +50,7 @@ export function LiveClock({ node, compact = false }: { node: Node; compact?: boo
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the clock starts after hydration on purpose, so the pre-built HTML matches
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 5000);
     return () => clearInterval(t);

@@ -82,6 +82,7 @@ export default function SubscriptionPage() {
     const checkoutRef = new URLSearchParams(window.location.search).get("sg16_checkout_ref");
     if (!checkoutRef) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the checkout return reference is read from the URL after hydration
     setBusy("confirm");
     setError(null);
     void (async () => {

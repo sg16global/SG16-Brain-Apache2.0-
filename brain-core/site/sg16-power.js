@@ -54,6 +54,12 @@
     }
   }
 
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
   function addStyle() {
     if (document.getElementById(ID + "-style")) return;
     var st = document.createElement("style");
@@ -75,7 +81,7 @@
       '<svg class="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>' +
       " BRAIN POWER</h3>" +
       '<p class="pw-text font-mono2">' + text + "</p>" +
-      (errorText ? '<p class="pw-err font-mono2">' + errorText + "</p>" : "") +
+      (errorText ? '<p class="pw-err font-mono2">' + esc(errorText) + "</p>" : "") +
       "</div>" +
       '<button type="button" class="pw-switch font-display" role="switch" aria-label="SG16 Brain power" aria-checked="' +
       (on ? "true" : "false") + '"' + (busy || !known ? " disabled" : "") + ">" +

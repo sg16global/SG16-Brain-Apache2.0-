@@ -48,9 +48,13 @@ test("an expired lease reclaims the abandoned slot", () => {
   assert.ok(d.acquire().granted, "with nobody waiting, lease expiry hands the slot to the next caller");
 });
 
-test("lease outlasts the longest legitimate hold (2 x 60s draft + 60s self-check)", async () => {
+test("lease outlasts the longest legitimate hold (draft + retry + self-check at the configured timeout)", async () => {
   const { DEFAULT_QUEUE_CONFIG } = await import("../src/inference-gate.ts");
-  assert.ok(DEFAULT_QUEUE_CONFIG.leaseMs > 2 * 60_000 + 60_000, "draft retries + the self-check pass must fit inside the lease");
+  const { readFileSync } = await import("node:fs");
+  const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  const timeout = Number(/"INFERENCE_TIMEOUT_MS"\s*:\s*"(\d+)"/.exec(config)?.[1]);
+  assert.ok(timeout > 0, "INFERENCE_TIMEOUT_MS is set in wrangler.jsonc");
+  assert.ok(DEFAULT_QUEUE_CONFIG.leaseMs > 3 * timeout, `3 model calls x ${timeout} ms must fit inside the ${DEFAULT_QUEUE_CONFIG.leaseMs} ms lease`);
 });
 
 test("a newcomer cannot jump the queue in the gap between release and the head's poll", () => {

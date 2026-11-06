@@ -594,6 +594,10 @@ export function recentHistory(history: unknown, message: string): HistoryTurn[] 
     kept.unshift(turns[i]);
     used += cost;
   }
+  // The brain's chat format alternates [INST]user[/INST]answer</s>; a history
+  // that starts with an answer (cut between a question and its answer, by the
+  // 6-turn window or the budget) would put text before the first [INST].
+  while (kept.length && kept[0].role !== "user") kept.shift();
   return kept;
 }
 
@@ -817,30 +821,29 @@ export async function designCompatRoute(
     const message = typeof body.message === "string" ? body.message.trim() : "";
     if (!message) return json({ error: "Enter a message." }, 400);
     if (message.length > 8192) return json({ error: "A chat message is at most 8K characters." }, 400);
-    // The connector contract (docs/SG16-CONNECTOR-API.md): a project body
-    // forwards its key as a Bearer and is rate-limited as that project, never
-    // as one anonymous visitor behind its server's address (the old host's
-    // work tier). Then the design's own contract: a device-held pass is
-    // verified server-side; absent or expired -> free tier under the
-    // standard host limits.
-    // A signed-in visitor (account token) chats on their account: a pass
-    // held on this device is kept with the account, and a pass the account
-    // already holds works here too. Without a pass, the account's own
-    // one-time free tokens are used. Visitors who are not signed in and hold
-    // no pass are asked to sign in (free), so the allowance follows people.
+    // Who is asking, in this order:
+    //  1. an API project (docs/SG16-CONNECTOR-API.md): its key as a Bearer,
+    //     rate-limited as that project. A key that does not work (switched
+    //     off, retired, forged) gets a key error, never the visitor's
+    //     "sign in" note;
+    //  2. a website visitor with a device pass (verified server-side);
+    //  3. a signed-in visitor (account token): a pass held on this device is
+    //     kept with the account, and a pass the account holds works here too;
+    //     without a pass, the account's own one-time free tokens are used.
+    // Not signed in and no pass: asked to sign in (free).
     const keyed = await deps.keyAuth(request.headers.get("authorization"));
+    if (!keyed && /^Bearer\s+sg16p?_/i.test(request.headers.get("authorization") ?? "")) {
+      return json(
+        { error: "This API key is not working: it is switched off, retired or not valid. Ask the operator.", keyOff: true },
+        403,
+      );
+    }
     const who = keyed ? null : await signedInAs(request, env);
     let pass = keyed ? null : await resolvePass(request.headers.get("x-sg16-pass"), env);
     if (who) {
       const stored = await accountPass(env, who.email).catch(() => null);
       if (pass) await rememberPass(env, who.email, pass.pass, stored).catch(() => undefined);
       else if (stored) pass = await resolvePass(stored, env);
-    }
-    if (!keyed && /^Bearer\s+sg16p_/i.test(request.headers.get("authorization") ?? "")) {
-      return json(
-        { error: "This API key is not working: it is switched off, retired or not valid. Ask the operator.", keyOff: true },
-        403,
-      );
     }
     if (!keyed && !pass && !who) {
       return json(

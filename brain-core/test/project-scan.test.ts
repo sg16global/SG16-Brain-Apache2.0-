@@ -33,6 +33,21 @@ test("recentHistory keeps recent turns as chat turns inside the 8K budget and ig
   assert.ok(size <= 8192);
   assert.ok(kept.length > 0 && kept.length <= 6, "only the last turns are kept");
 
+  // the history the brain gets always starts with a user turn
+  const odd = [
+    { role: "user", content: "q1" }, { role: "assistant", content: "a1" },
+    { role: "user", content: "q2" }, { role: "assistant", content: "a2" },
+    { role: "user", content: "q3" }, { role: "assistant", content: "a3" },
+    { role: "user", content: "q4" }, { role: "assistant", content: "a4" },
+    { role: "user", content: "q5" },
+  ];
+  const window = recentHistory(odd, "next"); // the last 6 start with "a2"
+  assert.equal(window[0].role, "user");
+  assert.deepEqual(window.map((t) => t.content), ["q3", "a3", "q4", "a4", "q5"]);
+  assert.deepEqual(recentHistory([{ role: "assistant", content: "hello" }], "hi"), []);
+  for (const t of kept) assert.ok(["user", "assistant"].includes(t.role));
+  assert.equal(kept[0]?.role ?? "user", "user");
+
   // garbage and empty histories give no turns
   assert.deepEqual(recentHistory("not-an-array" as never, "hi"), []);
   assert.deepEqual(recentHistory([{ role: "bogus", content: "x" }], "hi"), []);

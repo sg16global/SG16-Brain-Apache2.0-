@@ -1,5 +1,17 @@
 # The zero-data rule
 
+> **Changed 2026-11-06 — read this first.** The brain-core Worker (the site's
+> server) now has **visitor accounts** (owner request): sign-up / sign-in by an
+> emailed code. It stores, per account: the **email address**, when the account
+> was created and last signed in, and the account's **pass** (D1 table
+> `accounts`); and for 10 minutes one sign-in code per email, as an HMAC
+> (table `login_codes`). The account's free-token count lives in a Durable
+> Object under a hash of the email, and the request log (`requests`) records
+> that same pseudonymous id per answer. The rule below is therefore **no
+> longer true for the Worker**, and several public pages still say "no
+> accounts" / "nothing about you is stored" — see the review report of
+> 2026-11-06. The pointoni platform described below is unchanged.
+
 This platform keeps **no user data on its server**. Not a little, not "only in memory": none. The same
 rule is meant for every project built on the Brain.
 

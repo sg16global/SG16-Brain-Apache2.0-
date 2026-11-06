@@ -117,10 +117,22 @@
     return null;
   }
 
+  // React marks a node with __reactFiber$… once it has hydrated it. Adding the
+  // badge before that is a hydration mismatch (React #418): React then throws
+  // the server HTML away and re-renders the page. So wait for hydration
+  // (8 s at most, for pages React never hydrates).
+  function hydrated(el) {
+    var keys = Object.keys(el);
+    for (var i = 0; i < keys.length; i++) if (keys[i].indexOf("__reactFiber") === 0) return true;
+    return false;
+  }
+  var started = Date.now();
+
   function place() {
     var a = anchor();
     if (!a) return;
     if (a.querySelector("#" + ID)) return;
+    if (!hydrated(a) && Date.now() - started < 8000) return;
     addStyle();
     var old = document.getElementById(ID);
     if (old) old.remove();
@@ -146,6 +158,12 @@
 
   function start() {
     new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    // hydration adds no DOM nodes, so also re-check a few times until placed
+    var tries = 0;
+    var t = setInterval(function () {
+      place();
+      if (document.getElementById(ID) || ++tries > 40) clearInterval(t);
+    }, 250);
     place();
   }
 

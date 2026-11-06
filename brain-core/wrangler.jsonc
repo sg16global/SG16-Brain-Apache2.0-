@@ -57,7 +57,8 @@
     "MODEL_NUM_CTX": "8192",
     "MAX_OUTPUT_CHARS": "16384",
     // the 12B Q4_K_M brain answers slower than the old 4B model; 95s stays under
-    // Cloudflare's ~100s origin-response cap on the tunnel (2 x 95s < 240s queue lease)
+    // Cloudflare's ~100s origin-response cap on the tunnel. One chat holds the
+    // slot for at most draft + retry + self-check = 3 x 95s = 285s < 300s lease.
     "INFERENCE_TIMEOUT_MS": "95000",
     "MAX_QUEUE_WAIT_MS": "120000",
     "SELF_CHECK": "false",

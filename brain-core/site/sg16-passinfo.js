@@ -73,6 +73,17 @@
     return box;
   }
 
+  // React marks a node with __reactFiber$… once it has hydrated it. Adding the
+  // box before that is a hydration mismatch (React #418): React then throws
+  // the server HTML away and re-renders the page. So wait for hydration
+  // (8 s at most).
+  function hydrated(el) {
+    var keys = Object.keys(el);
+    for (var i = 0; i < keys.length; i++) if (keys[i].indexOf("__reactFiber") === 0) return true;
+    return false;
+  }
+  var started = Date.now();
+
   function place() {
     var old = document.getElementById(ID);
     if (!onSubscription()) {
@@ -81,6 +92,7 @@
     }
     var a = anchor();
     if (!a) return;
+    if (!hydrated(a.parentElement) && Date.now() - started < 8000) return;
     if (old && old.nextElementSibling === a) return;
     if (old) old.remove();
     addStyle();
@@ -99,6 +111,12 @@
 
   function start() {
     new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    // hydration adds no DOM nodes, so also re-check a few times until placed
+    var tries = 0;
+    var t = setInterval(function () {
+      place();
+      if (document.getElementById(ID) || !onSubscription() || ++tries > 40) clearInterval(t);
+    }, 250);
     place();
   }
 

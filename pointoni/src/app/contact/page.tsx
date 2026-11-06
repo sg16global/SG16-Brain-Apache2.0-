@@ -17,6 +17,7 @@ function ContactForm() {
 
   useEffect(() => {
     const s = params.get("subject");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the ?subject= query is read after hydration, so the pre-built HTML matches
     if (s) setSubject(s);
   }, [params]);
 
