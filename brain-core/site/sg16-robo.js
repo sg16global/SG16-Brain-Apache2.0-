@@ -1,11 +1,17 @@
 // SG16 — Brain Robo, the homepage guide (owner request 2026-11-06).
 //
 // Replaces the blue globe on the right of the hero with the SG16 Brain Robo.
-// 2026-11-06 (owner's video): the robot is the owner's full-body robot video
-// in the site's RED-BLACK NEON (owner request): glossy black body, red neon
-// eyes, visor, ears and outline, SG16 / BRAIN ROBO in red neon on its chest,
-// on a dark red stage that fades to black: /images/sg16-robo.mp4 (a 10 s
-// forward-and-back loop with no seam, muted) with
+// 2026-11-06 (owner's own robot, IMG_3188): glossy red SG16 Brain Robo in red
+// smoke, colours as the owner made them. Two clips, cross-faded:
+//   /images/sg16-robo-idle.mp4  standing, looking, blinking (a seamless
+//                               forward-and-back loop) - quiet and talking
+//   /images/sg16-robo-wave.mp4  the camera moves in and it waves (played once)
+//                               - on "Welcome", when tapped, and at the end
+// From the visitor's first touch on the homepage it waves at once, then
+// again every 10 s while it is on screen (owner request).
+// Body language follows the voice: it waves when it greets, and its lights
+// pulse on every spoken word (speech "boundary" events; a steady rhythm when
+// the device has no voice and the words are only shown), with
 // /images/sg16-robo.jpg as its still (slow connections, reduced motion).
 // On screens 1280 px and wider the robot stands in the open stage area RIGHT
 // of the seal (never touching it), as large as that space allows; layout()
@@ -26,7 +32,8 @@
   "use strict";
   var ID = "sg16-robo";
   var DOCK = "sg16-robo-dock";
-  var VIDEO = "/images/sg16-robo.mp4";
+  var IDLE_VIDEO = "/images/sg16-robo-idle.mp4";
+  var WAVE_VIDEO = "/images/sg16-robo-wave.mp4";
   var POSTER = "/images/sg16-robo.jpg";
   var SEEN = "sg16-robo-toured"; // the tour starts by itself once per visit
   var HELLO = "Welcome! Tap anywhere — let's go meet our 10 AI pioneers.";
@@ -34,7 +41,7 @@
 
   // target = the section shown while the lines are spoken (null = the hero)
   var STEPS = [
-    { target: null, say: [
+    { target: null, wave: true, say: [
       "Welcome to Sovereign SG16 Brain!",
       "Let's go. I will introduce our ten AI pioneers, then the world's AI, then what AI is.",
     ] },
@@ -55,7 +62,7 @@
       "Now the details. AI is technology that processes information, recognizes patterns, and helps people solve problems.",
       "With AI you learn faster, work smarter, and solve bigger problems.",
     ] },
-    { target: "chat", say: [
+    { target: "chat", wave: true, say: [
       "That is our tour. Ask me anything here in the chat. I am SG16 Brain.",
     ] },
   ];
@@ -86,12 +93,18 @@
     "#" + ID + " .sr-bot:focus-visible{outline:2px solid rgba(255,90,100,.9);outline-offset:4px}" +
     "#" + ID + " .sr-glow{position:absolute;left:8%;right:8%;bottom:-2%;height:16%;border-radius:50%;pointer-events:none;" +
     "background:radial-gradient(ellipse at center,rgba(255,40,55,.55),rgba(255,40,55,.15) 55%,transparent 72%);filter:blur(10px)}" +
-    "#" + ID + " .sr-bot video{position:relative;display:block;width:100%;height:auto;aspect-ratio:600/900;object-fit:cover;transition:transform .3s ease;" +
+    "#" + ID + " .sr-bot video{position:relative;display:block;width:100%;height:auto;aspect-ratio:600/1056;object-fit:cover;transition:transform .3s ease,opacity .35s ease,filter .12s ease;" +
     "-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 13%,#000 87%,transparent 100%),linear-gradient(180deg,transparent 0,#000 5%,#000 92%,transparent 100%);" +
     "-webkit-mask-composite:source-in;" +
     "mask-image:linear-gradient(90deg,transparent 0,#000 13%,#000 87%,transparent 100%),linear-gradient(180deg,transparent 0,#000 5%,#000 92%,transparent 100%);" +
     "mask-composite:intersect;filter:drop-shadow(0 0 18px rgba(255,40,55,.35))}" +
     "#" + ID + " .sr-bot:hover video{transform:scale(1.02)}" +
+    // the wave clip lies over the idle loop and cross-fades in while it plays
+    "#" + ID + " .sr-bot .sr-wave{position:absolute;left:0;top:0;opacity:0}" +
+    "#" + ID + ".sr-waving .sr-bot .sr-wave{opacity:1}" +
+    "#" + ID + ".sr-waving .sr-bot .sr-idle{opacity:0}" +
+    // a light pulse on every spoken word
+    "#" + ID + ".sr-word .sr-bot video{filter:drop-shadow(0 0 28px rgba(255,60,75,.85)) brightness(1.12)}" +
     "#" + ID + ".sr-talking .sr-glow{animation:sr-pulse 1.2s ease-in-out infinite}" +
     "@keyframes sr-pulse{0%,100%{opacity:.75}50%{opacity:1;transform:scale(1.05)}}" +
     // the section being introduced
@@ -103,7 +116,7 @@
     "animation:sr-in .4s ease-out both}" +
     "#" + DOCK + "[hidden]{display:none}" +
     // the robot's face, from its still
-    "#" + DOCK + " .sd-face{flex:none;width:58px;height:58px;border-radius:50%;background:#2a0508 url(" + POSTER + ") 50% 9%/150% auto no-repeat;" +
+    "#" + DOCK + " .sd-face{flex:none;width:58px;height:58px;border-radius:50%;background:#2a0508 url(" + POSTER + ") 50% 13%/140% auto no-repeat;" +
     "border:1px solid rgba(255,90,100,.7);box-shadow:0 0 14px rgba(255,40,55,.6)}" +
     "#" + DOCK + " p{margin:0;font-family:var(--font-ui);font-size:13.5px;line-height:1.4;font-weight:600;color:#ffe9ec}" +
     "#" + DOCK + " button{flex:none;align-self:flex-start;padding:4px 9px;border-radius:8px;border:1px solid rgba(255,51,68,.55);background:rgba(255,51,68,.1);" +
@@ -130,14 +143,23 @@
       '<p class="sr-bubble" role="status" aria-live="polite"></p>' +
       '<button class="sr-bot" type="button" aria-label="SG16 Brain Robo — play the welcome tour">' +
       '<span class="sr-glow" aria-hidden="true"></span>' +
-      '<video src="' + VIDEO + '" poster="' + POSTER + '" width="600" height="900" muted loop playsinline autoplay preload="auto" aria-hidden="true"></video></button>';
+      '<video class="sr-idle" src="' + IDLE_VIDEO + '" poster="' + POSTER + '" width="600" height="1056" muted loop playsinline autoplay preload="auto" aria-hidden="true"></video>' +
+      '<video class="sr-wave" src="' + WAVE_VIDEO + '" width="600" height="1056" muted playsinline preload="auto" aria-hidden="true"></video></button>';
     s.querySelector(".sr-bubble").textContent = running ? line : seen() ? AGAIN : HELLO;
-    var v = s.querySelector("video");
-    v.muted = true; // set as a property too: some browsers only autoplay when it is
-    if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    var v = s.querySelector(".sr-idle"), w = s.querySelector(".sr-wave");
+    v.muted = true; w.muted = true; // set as properties too: some browsers only autoplay when they are
+    // the wave shows only once its first frame is playing, and hands back when done
+    w.addEventListener("playing", function () { s.classList.add("sr-waving"); });
+    w.addEventListener("ended", function () { s.classList.remove("sr-waving"); });
+    if (reduceMotion()) {
       v.removeAttribute("autoplay"); // the still only
     } else {
-      var play = function () { var p = v.play(); if (p && p.catch) p.catch(function () {}); };
+      var play = function () {
+        var p = v.play(); if (p && p.catch) p.catch(function () {});
+        // the first time the robot appears it waves hello (silently: a page
+        // may not speak before the visitor touches it)
+        if (!greeted) { greeted = true; setTimeout(wave, 1200); }
+      };
       if (v.readyState >= 2) play(); else v.addEventListener("canplay", play, { once: true });
     }
     s.querySelector(".sr-bot").addEventListener("click", function () {
@@ -145,6 +167,45 @@
       else startTour();
     });
     return s;
+  }
+
+  var greeted = false;
+  function reduceMotion() {
+    return Boolean(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+
+  // body language: the wave clip, played once over the idle loop
+  function wave() {
+    var r = document.getElementById(ID);
+    var w = r && r.querySelector(".sr-wave");
+    if (!w || reduceMotion()) return;
+    try { w.currentTime = 0; } catch (e) {}
+    var p = w.play();
+    if (p && p.catch) p.catch(function () {});
+  }
+
+  // from the first touch: a wave now, then one every 10 s while the robot is
+  // on screen, the tab is open and the visitor is on the homepage
+  var WAVE_EVERY_MS = 10000;
+  var waveLoop = 0;
+  function startWaveLoop() {
+    if (waveLoop || reduceMotion()) return;
+    wave();
+    waveLoop = setInterval(function () {
+      var r = document.getElementById(ID);
+      if (!r || document.hidden || !heroVisible || location.pathname !== "/") return;
+      if (!r.classList.contains("sr-waving")) wave();
+    }, WAVE_EVERY_MS);
+  }
+
+  // ...and a light pulse on each spoken word
+  var pulseTimer = 0;
+  function pulse() {
+    var r = document.getElementById(ID);
+    if (!r || reduceMotion()) return;
+    r.classList.add("sr-word");
+    clearTimeout(pulseTimer);
+    pulseTimer = setTimeout(function () { r.classList.remove("sr-word"); }, 140);
   }
 
   function dock() {
@@ -206,18 +267,28 @@
     }
     var ms = 1600 + text.length * 70; // reading time when there is no voice
     var v = voice();
+    var beat = 0;
+    var heard = false;
+    var stopBeat = function () { clearInterval(beat); beat = 0; };
     if (v) {
       var u = new SpeechSynthesisUtterance(text);
       u.voice = v;
       u.lang = v.lang;
       u.rate = 1;
       u.pitch = 1.1;
-      u.onend = fin;
-      u.onerror = fin;
+      // lights on each word as it is spoken
+      u.onboundary = function (e) {
+        if (!e.name || e.name === "word") { heard = true; stopBeat(); pulse(); }
+      };
+      u.onend = function () { stopBeat(); fin(); };
+      u.onerror = function () { stopBeat(); fin(); };
       synth.speak(u);
-      timer = setTimeout(fin, ms + 8000); // in case the browser never reports the end
+      // a voice that sends no word events still gets a talking rhythm
+      beat = setInterval(function () { if (!heard) pulse(); }, 320);
+      timer = setTimeout(function () { stopBeat(); fin(); }, ms + 8000); // in case the browser never reports the end
     } else {
-      timer = setTimeout(fin, ms);
+      beat = setInterval(pulse, 320); // words only shown: the same rhythm
+      timer = setTimeout(function () { stopBeat(); fin(); }, ms);
     }
   }
 
@@ -249,6 +320,7 @@
     focusOn(el);
     scrollToEl(el);
     talking(true);
+    if (s.wave) wave();                         // greeting and goodbye
     var j = 0;
     (function next() {
       if (my !== run) return;
@@ -312,6 +384,11 @@
   var SKIP =
     "a,button,input,textarea,select,label,summary,[role=button],[contenteditable],video,audio," +
     "header,nav,#chat,#pioneers,#project-scan,#sovereign-side-panel,#" + DOCK;
+  // any first touch or click on the homepage wakes the robot's waving
+  document.addEventListener("pointerdown", function () {
+    if (location.pathname === "/" && document.getElementById(ID)) startWaveLoop();
+  }, { capture: true, passive: true });
+
   document.addEventListener("click", function (e) {
     if (running || seen() || location.pathname !== "/") return;
     if (!document.getElementById(ID)) return;
