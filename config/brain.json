@@ -1,0 +1,143 @@
+{
+  "brain": {
+    "name": "SG16 BRAIN",
+    "version": "1.0.0",
+    "domain": "mistralbrain.com",
+    "independent": false,
+    "open_access": true
+  },
+  "hosting": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "max_body_bytes": 4194304,
+    "cors_origins": [
+      "https://mistralbrain.com",
+      "http://mistralbrain.com"
+    ],
+    "request_timeout_seconds": 30
+  },
+  "transport": {
+    "mode": "offline",
+    "probe_network": false,
+    "note": "Transport is declared by the operator, never probed. The mathematical core is transport-blind."
+  },
+  "engine": {
+    "model_type": "sg16-seeded-structural-encoder",
+    "head": "sg16-seeded-structural-encoder",
+    "architecture": "Seeded Q16.16 structural encoder used for intent vectors and planning; not a pretrained language model.",
+    "weight_origin": "deterministic-seeded-matrices-not-trained",
+    "fallback": {
+      "head": "sg16-seeded-structural-encoder",
+      "dim": 64,
+      "ffn_hidden": 128,
+      "chunk_bytes": 32,
+      "max_chunks": 64,
+      "layers": 2,
+      "seed": "sg16.core.matrix.v2",
+      "density": "seeded-fixed-point-structural-encoder-not-trained"
+    },
+    "arithmetic": "q16.16-fixed-point-structural-encoder",
+    "offline_online": "Local deterministic processing; transport label is metadata only.",
+    "note": "No autoregressive language-model inference is implemented or wired into this build. Unknown questions are deferred."
+  },
+  "audio": {
+    "head": "local-dsp-profile",
+    "route": "deterministic-acoustic-analysis",
+    "bins_hz": [
+      100,
+      200,
+      400,
+      700,
+      1000,
+      1500,
+      2200,
+      3200
+    ],
+    "transcription": "not-implemented; caller-declared transcript only"
+  },
+  "gate": {
+    "joint_room": [
+      "shell",
+      "kali",
+      "terminal"
+    ],
+    "blend": {
+      "shell": 0.34,
+      "kali": 0.36,
+      "terminal": 0.3
+    },
+    "threshold": 0.62,
+    "veto_level": 0.85,
+    "gain": 1.5,
+    "bias": -1.4,
+    "re_inspect_on_exit": false
+  },
+  "perimeter": {
+    "sides": [
+      "north",
+      "east",
+      "south",
+      "west"
+    ],
+    "doors": 1,
+    "sealed": true
+  },
+  "identity": {
+    "official_name": "Sovereign SG16 Brain",
+    "designation": "SG16",
+    "inscription_tag": "sg16.identity.v1",
+    "utterance": "I'm Sovereign SG16 Brain, an AI assistant from the SG16 project. This build uses deterministic code and curated information rather than a general-purpose pretrained language model.",
+    "language_parity": "UTF-8 input only; language identification, translation, and general multilingual generation are not implemented.",
+    "translation_loops": 0
+  },
+  "knowledge": {
+    "path": "knowledge/sg16_core.json",
+    "threshold": 0.42,
+    "on_miss": "defer-canonically",
+    "lexical_floor": 0.18
+  },
+  "sessions": {
+    "max_sessions": 512
+  },
+  "owner": {
+    "credential_env": "SG16_OWNER_SECRET",
+    "bypass": [
+      "operational_throttles"
+    ],
+    "never_bypass": [
+      "anti_harm_gate",
+      "safety_invariants"
+    ],
+    "note": "Disabled when the server-only secret is unset. Email addresses and browser identity are not credentials."
+  },
+  "throttle": {
+    "max_requests": 30,
+    "window_seconds": 60,
+    "max_chars": 200000
+  },
+  "billing": {
+    "currency": "USD",
+    "humanitarian_region": "Palestine",
+    "passes": {
+      "day": 3,
+      "week": 5,
+      "half": 8,
+      "month": 15
+    },
+    "dodo": {
+      "test_mode": false,
+      "api_base_test": "https://test.dodopayments.com",
+      "api_base_live": "https://live.dodopayments.com",
+      "api_key": "",
+      "webhook_secret": "",
+      "product_ids": {
+        "day": "pdt_0NoUNgIwv3XfCVptVxLaa",
+        "week": "pdt_0NoUNgD5Yjz1cRYOwIixQ",
+        "half": "pdt_0NoUNg8AK64S8TkG2b5tK",
+        "month": "pdt_0NoUNg3MglpZRU2yPvduq"
+      },
+      "note": "Configure DODO_API_KEY, DODO_WEBHOOK_SECRET, and one product ID per pass. Paid checkout is disabled when the gateway is not configured. SG16_BILLING_SECRET should be a high-entropy server-only value. Zero-rate regional passes require a trusted proxy configured with SG16_PROXY_AUTH_SECRET."
+    },
+    "secret_env": "SG16_BILLING_SECRET"
+  }
+}

@@ -1,0 +1,44 @@
+name: Deploy brain-core Worker
+
+# GitHub -> Cloudflare CI/CD for the deterministic brain core.
+# Deploys ONLY the brain-core package; the inference VPS is never touched.
+#
+# Required repository secrets (GitHub -> Settings -> Secrets):
+#   CLOUDFLARE_API_TOKEN    a token with Workers Scripts:Edit + KV:Edit + D1:Edit
+#   CLOUDFLARE_ACCOUNT_ID  your Cloudflare account id
+
+# MANUAL ONLY for the fresh deployment (2026-11-06): a push never deploys by
+# itself, so nothing goes live (and no domain moves) until the owner starts it:
+# GitHub -> Actions -> "Deploy brain-core Worker" -> Run workflow.
+# When docs/FRESH-DEPLOY.md steps 3-5 are done and automatic deploys are
+# wanted again, put back:
+#   push:
+#     branches: [main]
+#     paths: ["brain-core/**", "web/**"]
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: brain-core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run the deterministic core tests
+        run: |
+          npm install --no-save typescript @cloudflare/workers-types || true
+          node --test "test/*.test.ts"
+      - name: Stage the web client into the Worker assets
+        run: npm run web:sync
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: brain-core
+          command: deploy

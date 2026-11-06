@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 300" role="img" aria-label="AI neural head">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#020810"/>
+      <stop offset="100%" stop-color="#010204"/>
+    </linearGradient>
+    <linearGradient id="wire" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00d9ff"/>
+      <stop offset="100%" stop-color="#0088ff"/>
+    </linearGradient>
+    <radialGradient id="core" cx="50%" cy="46%" r="42%">
+      <stop offset="0%" stop-color="#00d9ff" stop-opacity="0.95"/>
+      <stop offset="55%" stop-color="#0055aa" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#001018" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="260" height="300" rx="10" fill="url(#bg)" stroke="rgba(0,217,255,.22)" stroke-width="1"/>
+  <!-- side-profile cranium outline -->
+  <path d="M78 228c-8-36 6-88 34-118 24-26 58-34 88-22 24 10 40 34 46 62 8 38-6 78-34 98-28 20-66 18-96-4-12-9-22-22-34-16z"
+        fill="#040a12" stroke="url(#wire)" stroke-width="1.6"/>
+  <!-- neural core / brain lattice -->
+  <ellipse cx="132" cy="132" rx="46" ry="52" fill="url(#core)"/>
+  <circle cx="132" cy="132" r="14" fill="none" stroke="#00d9ff" stroke-width="1.4"/>
+  <circle cx="132" cy="132" r="6" fill="#00d9ff"/>
+  <path d="M132 86v24M132 154v28M96 132h24M144 132h24" stroke="#00d9ff" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M108 108l16 16M156 108l-16 16M108 156l16-16M156 156l-16-16" stroke="rgba(0,217,255,.55)" stroke-width="1"/>
+  <!-- circuit traces -->
+  <path d="M54 74h28l12 12h36M54 226h34l10-12h40" fill="none" stroke="url(#wire)" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M206 68l-18 18v32M206 232l-18-18v-30" fill="none" stroke="rgba(0,136,255,.75)" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="54" cy="74" r="2.5" fill="#00d9ff"/>
+  <circle cx="54" cy="226" r="2.5" fill="#00d9ff"/>
+  <circle cx="206" cy="68" r="2.5" fill="#0088ff"/>
+  <circle cx="206" cy="232" r="2.5" fill="#0088ff"/>
+  <!-- neck / spine interface -->
+  <path d="M118 220h28v34c-10 6-26 6-36 0l8-34z" fill="#030810" stroke="rgba(0,217,255,.35)" stroke-width="1"/>
+  <path d="M128 246v18M136 246v18M124 254h24" stroke="#00d9ff" stroke-width="1" stroke-linecap="round"/>
+  <!-- data stream lines -->
+  <path d="M24 150h18M218 118h18M218 166h18" stroke="rgba(0,217,255,.45)" stroke-width="1" stroke-dasharray="3 4"/>
+</svg>

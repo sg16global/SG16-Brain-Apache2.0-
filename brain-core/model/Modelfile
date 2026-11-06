@@ -1,0 +1,33 @@
+# SG16 Brain — the one and only brain of this system.
+#
+# Weights: sg16-brain-Q4_K_M.gguf (GGUF v3, general.file_type 15 = Q4_K_M,
+# llama arch, 12B, Tekken tokenizer, chat format mistral-v3-tekken).
+# Register on the model host with:
+#   ollama create saiftechglobal/sg16-brain:q4_k_m -f Modelfile
+# (scripts/vps-setup-model.sh rewrites FROM to the absolute GGUF path.)
+#
+# The system prompt is sent per request by the brain core (src/prompt.ts),
+# so none is baked in here.
+FROM ../../../sg16-brain-Q4_K_M.gguf
+
+# mistral-v3-tekken chat format: [INST]...[/INST]answer</s>
+# BOS is added by the runtime (tokenizer.ggml.add_bos_token = true).
+# The system prompt rides in front of the FIRST user turn. Measured on these
+# weights (2026-11-06): with chat history, a system prompt on the LAST turn
+# broke answers ("12 times 7" -> 42/35/42); on the first turn it was right 3/3.
+TEMPLATE """{{- $first := true }}
+{{- range $i, $_ := .Messages }}
+{{- if eq .Role "user" }}[INST]{{ if and $.System $first }}{{ $.System }}
+
+{{ end }}{{ .Content }}[/INST]{{ $first = false }}
+{{- else if eq .Role "assistant" }}{{ .Content }}
+{{- if not (eq (len (slice $.Messages $i)) 1) }}</s>
+{{- end }}
+{{- end }}
+{{- end }}"""
+
+PARAMETER stop "[INST]"
+PARAMETER stop "[/INST]"
+PARAMETER stop "</s>"
+PARAMETER temperature 0.3
+PARAMETER num_ctx 8192

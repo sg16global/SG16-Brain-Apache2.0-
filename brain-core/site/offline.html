@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#04050a">
+<title>Offline · Sovereign SG16 Brain</title>
+<style>
+  /* shown by sw.js only when a page cannot be reached; self-contained, no network needed */
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid; place-items: center; padding: 24px 16px;
+    background: radial-gradient(900px 420px at 50% -80px, #4a0a12 0%, transparent 70%), #04050a;
+    color: #dce6f2; font-family: Georgia, "Times New Roman", serif; text-align: center;
+  }
+  .box { max-width: 460px; display: grid; gap: 16px; justify-items: center; }
+  img { width: 132px; height: auto; filter: drop-shadow(0 0 18px rgba(255, 190, 80, .35)); }
+  h1 { margin: 0; font-size: 26px; letter-spacing: .12em; text-transform: uppercase; color: #ffd166; }
+  p { margin: 0; font-size: 17px; line-height: 1.6; color: #b8c2d0; }
+  button {
+    font: inherit; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: #fff; cursor: pointer;
+    background: linear-gradient(#ff3b4c, #c20f1e); border: 1px solid #ff7878b3; border-radius: 9px; padding: 11px 26px;
+  }
+  button:focus-visible { outline: 2px solid #ffd166; outline-offset: 3px; }
+</style>
+</head>
+<body>
+  <main class="box">
+    <img src="/icons/icon-192.png" alt="Sovereign SG16 Brain">
+    <h1>You are offline</h1>
+    <p>SG16 Brain needs the internet to answer. Check your connection, then try again.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
+  </main>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "Sovereign SG16 Brain",
+  "short_name": "SG16 Brain",
+  "description": "Sovereign SG16 Brain: 100% independent, self-contained, open to everyone. One brain, six nations, in-process mathematics.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#08010a",
+  "theme_color": "#08010a",
+  "lang": "en",
+  "categories": ["productivity", "education", "utilities"],
+  "icons": [
+    {
+      "src": "/assets/sg16-brain-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/sg16-brain-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

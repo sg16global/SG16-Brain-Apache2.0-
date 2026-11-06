@@ -1,0 +1,15 @@
+{
+  "name": "sg16-brain-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SG16 BRAIN interface. Builds with Vite, but the sovereign host also serves these modules raw - no bundler, no CDN, no third-party runtime.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

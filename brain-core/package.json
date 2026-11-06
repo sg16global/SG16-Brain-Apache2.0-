@@ -1,0 +1,19 @@
+{
+  "name": "sg16-brain-core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sovereign SG16 Brain — deterministic mathematical core on Cloudflare Workers. Inference-only VPS behind Cloudflare Tunnel; no third-party AI APIs — every answer is self-hosted and self-checked.",
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "deploy": "node scripts/sync-web.mjs && wrangler deploy",
+    "web:sync": "node scripts/sync-web.mjs",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.0.0"
+  }
+}
