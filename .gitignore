@@ -1,20 +1,13 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
 dist/
-web/dist/
-web/node_modules/
 pointoni/.next/
 pointoni/node_modules/
 .DS_Store
 
-# durable billing state (bearer-credential pass records) is host data, never committed
+# host data (bearer-credential pass records), never committed
 state/
 .env
 .env.*
 !.env.example
-.venv/
 
 # brain-core worker package
 brain-core/node_modules/

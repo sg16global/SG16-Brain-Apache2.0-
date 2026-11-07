@@ -112,7 +112,7 @@ test("the charter keeps the eight published invariants", () => {
 });
 
 test("GET /api/health includes the fields the design's admin console renders", async () => {
-  const env = { LOGS: stubDb, MODEL_NAME: "saiftechglobal/sg16-brain:q4_k_m" } as never;
+  const env = { LOGS: stubDb, MODEL_NAME: "saiftechglobal/sg16-brain:Q4_K_M" } as never;
   const probe = async () => ({ d1: true, model: true });
   const res = await clientRoute(new Request("https://mistralbrain.com/api/health"), env, "/api/health", probe);
   assert.ok(res);
@@ -129,7 +129,7 @@ test("GET /api/health includes the fields the design's admin console renders", a
   assert.equal(typeof body.answering, "string");
   const heart = body.heart as { status: string; model?: string };
   assert.equal(heart.status, "online");
-  assert.equal(heart.model, "saiftechglobal/sg16-brain:q4_k_m");
-  assert.deepEqual(body.engines, ["core", "saiftechglobal/sg16-brain:q4_k_m"], "one brain only");
+  assert.equal(heart.model, "saiftechglobal/sg16-brain:Q4_K_M");
+  assert.deepEqual(body.engines, ["core", "saiftechglobal/sg16-brain:Q4_K_M"], "one brain only");
   assert.equal(body.lastAnswered, null);
 });

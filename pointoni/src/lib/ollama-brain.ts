@@ -18,9 +18,9 @@
 //     `brain: "ollama"` — never dressed up as the core.
 //
 // Enable by pointing SG16_OLLAMA_URL at the daemon (default is the standard
-// loopback port). The model is the one SG16 Brain (Q4_K_M), registered from its GGUF:
-//   ollama create saiftechglobal/sg16-brain:q4_k_m -f brain-core/model/Modelfile
-//   SG16_OLLAMA_MODEL=saiftechglobal/sg16-brain:q4_k_m   (the default)
+// loopback port). The model is the one SG16 Brain (Q4_K_M), as published on Ollama:
+//   ollama pull saiftechglobal/sg16-brain:Q4_K_M
+//   SG16_OLLAMA_MODEL=saiftechglobal/sg16-brain:Q4_K_M   (the default)
 // ===================================================================
 
 import { distillCharter, type CharterBody } from "./charter-prompt.ts";
@@ -62,8 +62,8 @@ export class OllamaBridgeError extends Error {
 }
 
 const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
-// the one brain: SG16 Brain, Q4_K_M weights (brain-core/model/Modelfile)
-const DEFAULT_OLLAMA_MODEL = "saiftechglobal/sg16-brain:q4_k_m";
+// the one brain: SG16 Brain Q4_K_M (ollama.com/saiftechglobal/sg16-brain:Q4_K_M)
+const DEFAULT_OLLAMA_MODEL = "saiftechglobal/sg16-brain:Q4_K_M";
 const DEFAULT_TIMEOUT_MS = 45_000;
 /** What the prompt says about where the Brain runs. Deliberately generic: the inner model is not named. */
 export const RUNTIME_LABEL = "the operator's own server";

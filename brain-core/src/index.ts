@@ -17,7 +17,7 @@ import { authenticate, loadPolicy, parseAsk } from "./auth.ts";
 import { detectScript } from "./detect.ts";
 import { systemPrompt, messagesFor, apiMessages, checkMessages } from "./prompt.ts";
 import { verifyOutput, requestAllowed } from "./verify.ts";
-import { callModel, ModelError } from "./model-client.ts";
+import { callModel, ModelError, sameModel } from "./model-client.ts";
 import { freeTokenAllowance, type TokenBalance } from "./tokens.ts";
 import type { SendEmailBinding } from "./accounts.ts";
 import { withByteRange } from "./media-range.ts";
@@ -27,7 +27,7 @@ import { billingRoute } from "./billing-routes.ts";
 import { clientRoute, resolvePass, passKeyRecord, refuseStage } from "./client-routes.ts";
 import { designCompatRoute, designRscRoute, PROJECT_KEY_PREFIX, revokeProjectKey } from "./design-compat.ts";
 import { projectScanRoute } from "./project-scan.ts";
-import { compatError, modelList, parseChatCompletions, toChatCompletion } from "./openai-compat.ts";
+import { completionsError, modelList, parseChatCompletions, toChatCompletion } from "./chat-completions.ts";
 import type { AskMeta, ErrorBody, KeyRecord, Policy } from "./types.ts";
 import { DEFAULT_POLICY } from "./types.ts";
 
@@ -43,10 +43,8 @@ export interface Env {
 
   ASSETS: Fetcher;              // the staged web client (scripts/sync-web.mjs)
 
-  MODEL_PROVIDER: "ollama" | "llamacpp";
   MODEL_URL: string;              // set via wrangler var after the tunnel exists
-  MODEL_HEALTH_PATH: string;      // ollama: /api/tags | llamacpp: /health
-  MODEL_NAME: string;            // the one brain: SG16 Brain Q4_K_M (brain-core/model/Modelfile)
+  MODEL_NAME: string;            // the one brain: saiftechglobal/sg16-brain:Q4_K_M (published on Ollama)
   MODEL_NUM_CTX: string;
   MAX_OUTPUT_CHARS: string;
   INFERENCE_TIMEOUT_MS: string;
@@ -159,7 +157,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     if (request.method === "GET" && path === "/v1/state") {
       return await withAuth(request, env, async (record) => matrixState(env, record));
     }
-    // OpenAI-compatible door (openai-compat.ts): same pipeline as /v1/ask
+    // standard chat-completions door (chat-completions.ts): same pipeline as /v1/ask
     if ((request.method === "POST" && path === "/v1/chat/completions") || (request.method === "GET" && path === "/v1/models")) {
       const auth = await authenticate(
         request.headers.get("authorization"),
@@ -167,10 +165,10 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
         env.SG16_PROJECT_KEY_SECRET,
         revokedProjectList(env),
       );
-      if (!auth.ok) return compatError(401, "Invalid API key.");
+      if (!auth.ok) return completionsError(401, "Invalid API key.");
       if (path === "/v1/models") return modelList();
       const parsed = parseChatCompletions(await request.json().catch(() => null));
-      if (!parsed.ok) return compatError(parsed.status, parsed.message, parsed.param);
+      if (!parsed.ok) return completionsError(parsed.status, parsed.message, parsed.param);
       return await toChatCompletion(await askParsed(parsed.ask, env, ctx, auth.record, started));
     }
     if (path.startsWith("/api/") || path.startsWith("/v1/")) return jsonError(404, "E_NOT_FOUND");
@@ -316,7 +314,7 @@ async function askParsed(
       jsonError(402, "E_FREE_TOKENS"));
   }
 
-  // One brain: SG16 Brain Q4_K_M, self-hosted. There is no other model and no
+  // One brain: saiftechglobal/sg16-brain:Q4_K_M, self-hosted on Ollama. There is no other model and no
   // third-party AI API in this system — if the model host is down, the
   // request fails honestly (502).
   const modelCfg = modelCfgOf(env, env.MODEL_NAME);
@@ -391,7 +389,6 @@ async function attempt(
 
 function modelCfgOf(env: Env, model: string) {
   return {
-    provider: env.MODEL_PROVIDER,
     url: env.MODEL_URL,
     model,
     numCtx: Number(env.MODEL_NUM_CTX) || 8192,
@@ -624,7 +621,10 @@ async function healthProbe(env: Env): Promise<HealthProbe> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(env.MODEL_URL + (env.MODEL_HEALTH_PATH || "/api/tags"), {
+    // the model counts as online only when the brain server lists the one
+    // brain (MODEL_NAME) among its installed models — a server that answers
+    // without the SG16 Brain installed is not "online"
+    const response = await fetch(env.MODEL_URL + "/api/tags", {
       headers: {
         "authorization": `Bearer ${env.MODEL_SHARED_SECRET ?? ""}`,
         "CF-Access-Client-Id": env.CF_ACCESS_CLIENT_ID ?? "",
@@ -633,7 +633,12 @@ async function healthProbe(env: Env): Promise<HealthProbe> {
       signal: controller.signal,
     });
     clearTimeout(timer);
-    probe.model = response.ok;
+    if (response.ok) {
+      const tags = await response.json().catch(() => null) as { models?: Array<{ name?: unknown; model?: unknown }> } | null;
+      probe.model = Array.isArray(tags?.models) && tags.models.some((m) =>
+        (typeof m?.name === "string" && sameModel(m.name, env.MODEL_NAME)) ||
+        (typeof m?.model === "string" && sameModel(m.model, env.MODEL_NAME)));
+    }
   } catch { /* model stays false */ }
   return probe;
 }

@@ -35,7 +35,7 @@ export interface AskRequest {
 
 export interface AskMeta {
   engine: "model-vps" | "core";
-  model: string;       // the self-hosted brain that answered (SG16 Brain Q4_K_M)
+  model: string;       // the self-hosted brain that answered (saiftechglobal/sg16-brain:Q4_K_M)
   checked: boolean;    // the self-check pass ran on this answer
   queue_ms: number;
   latency_ms: number;

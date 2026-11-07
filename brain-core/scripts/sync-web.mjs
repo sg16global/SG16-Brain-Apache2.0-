@@ -5,9 +5,6 @@
 //                  its public assets) — committed, so deploys are
 //                  reproducible and CI can never wipe the design.
 //
-// The old pass-gated chat panel (../web, once served at /panel/) is no longer
-// staged: nothing linked to it, and the owner asked for it removed (2026-10-18).
-//
 // Layout after staging:  client/          -> https://<the site>/
 // All /api/* and /v1/* requests are handled by the Worker (run_worker_first),
 // never by these assets.

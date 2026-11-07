@@ -1,63 +1,90 @@
 # sg16-brain-core
 
-The sovereign, language-neutral brain core — a Cloudflare Worker that owns all
-deterministic logic, with an inference-only VPS behind a Cloudflare Tunnel.
+The SG16 Brain core — a Cloudflare Worker that owns all deterministic logic
+and serves the public site, with one self-hosted model on a brain server
+behind a Cloudflare Tunnel.
 
 ```
 visitor/project ──▶ Worker (this package)          [deterministic: keys, routing, state, scoring, verification, queue]
                         │  one at a time, FIFO queue (Durable Object)
                         ▼
-                   VPS model servers (Ollama/llama.cpp, 127.0.0.1 only, zero open ports)
-                        via https://internal.mistralbrain.com  (Cloudflare Tunnel + Access)
-                        ONE self-hosted brain: SG16 Brain Q4_K_M (saiftechglobal/sg16-brain:q4_k_m, model/Modelfile)
+                   brain server: Ollama, 127.0.0.1 only, zero open ports
+                        via https://internal.<your-domain>  (Cloudflare Tunnel + Access)
+                        ONE brain: saiftechglobal/sg16-brain:Q4_K_M (7.5 GB, ID f4b21a5d4668)
                         every answer is verified by the core (optional self-check: SELF_CHECK); no third-party AI API exists
+```
+
+## The brain
+
+`MODEL_NAME` = **`saiftechglobal/sg16-brain:Q4_K_M`**, exactly as published at
+https://ollama.com/saiftechglobal/sg16-brain:Q4_K_M (7.5 GB, 12.2B parameters,
+Q4_K_M, Ollama ID `f4b21a5d4668`). The brain server installs it with
+`ollama pull` (`scripts/vps-setup-model.sh`), which refuses any other build.
+The Worker calls Ollama's `/api/chat` and caps the context at 8192 tokens
+(`MODEL_NUM_CTX`); everything else (template, stop tokens, sampling) comes
+from the published package. `/v1/health` reports `model: true` only when the
+brain server lists this model as installed.
+
+## Layout
+
+```
+src/        the Worker (TypeScript, no runtime dependencies)
+site/       the public design (static export, committed; staged by scripts/sync-web.mjs)
+  fonts/    self-hosted fonts (OFL licences alongside)
+test/       node:test suites
+scripts/    fresh-setup, make-key, loadtest, sync-web, vps-setup-model.sh, extract-rsc
+schema.sql  D1 tables
 ```
 
 ## Bindings
 
 | Binding | Store | Purpose |
 |---|---|---|
-| `KEYS` | Workers KV | `sha256(api key) -> key record`; `policy:<project> -> project policy` |
-| `LOGS` | D1 (`schema.sql`) | request logs + history digests (real events only) |
-| `QUEUE` | Durable Object `InferenceQueueDO` | the single inference slot: semaphore + FIFO + lease expiry |
-| `MATRIX` | Durable Object `MatrixDO` | per-key living matrix: rate window, totals, integer score |
+| `KEYS` | Workers KV | `sha256(api key) -> key record`; `policy:<project> -> project policy`; `projctl:<key id>` switches |
+| `LOGS` | D1 (`schema.sql`) | request logs + history digests (real events only), accounts, payments |
+| `QUEUE` | Durable Object `InferenceQueueDO` | the single inference slot: semaphore + FIFO + lease expiry; BRAIN POWER switch |
+| `MATRIX` | Durable Object `MatrixDO` | per-key living matrix: rate window, totals, integer score, free-token bucket |
+| `ASSETS` | Workers static assets | the staged `site/` |
 
-## API (language-neutral: machine codes + the model's answer; nothing else)
+## API
+
+Core (machine codes + the model's answer; nothing else):
 
 | Route | Purpose |
 |---|---|
-| `POST /v1/ask` `{kind:"chat", text}` | gate -> queue -> VPS inference -> verify -> (self-check if SELF_CHECK) -> answer |
+| `POST /v1/ask` `{kind:"chat", text}` | gate -> queue -> brain -> verify -> (self-check if SELF_CHECK) -> answer |
 | `POST /v1/ask` `{kind:"compute", op:"2+3*4"}` | deterministic arithmetic inside the Worker — no model involved |
 | `POST /v1/ask` `{kind:"state", op:"score.step", delta}` | matrix state transition |
 | `GET /v1/state` | the caller's own matrix row |
 | `POST /v1/keys` | rotate the calling key itself (owner included) |
-| `GET /v1/health` | kv/d1/queue/model probes |
+| `GET /v1/health` | kv / d1 / queue / model / power probes |
+| `POST /v1/chat/completions` | the standard chat-completions request format (`model: "sg16-brain"`), same pipeline as `/v1/ask`; text only, no streaming |
+| `GET /v1/models` | lists `sg16-brain` |
 
-Errors are always `{ok:false, code:"E_*"}` with the matching HTTP status.
+Errors are always `{ok:false, code:"E_*"}` with the matching HTTP status
+(the chat-completions door uses the standard `{error:{message,type}}` shape).
 Human language exists only inside `answer` — produced by the model, verified
-by the core. No language, script or transliteration habit is special-cased
-anywhere; the model receives one universal rule and the detected script.
+by the core.
+
+Site routes (used by the pages in `site/`):
+
+| Route | Purpose |
+|---|---|
+| `GET/POST /api/brain` | website chat (sign-in or pass required; free-token metered) |
+| `GET/POST /api/identity` | visitor email-code sign-in, operator sign-in |
+| `GET /api/models`, `GET /api/health`, `GET /api/charter`, `GET /api/parity` | status pages |
+| `POST /api/session/forget`, `POST /api/ingest`, `POST /api/project-scan` | session reset, ingest, project scan |
+| `GET /api/admin/project-keys` (+ POST/DELETE), `GET /api/admin/project-activity`, `POST /api/admin/project-control`, `GET/POST /api/admin/brain-power` | admin console |
+| `GET/POST /api/billing`, `POST /api/dodo/checkout`, `POST /api/dodo/webhook`, `POST /api/dodo/confirm`, `POST /api/billing/confirm`, `POST /api/pass/verify`, `POST /api/pass-check` | passes (Dodo Payments) |
 
 ## Tests
 
 ```bash
-node --test "test/*.test.ts"     # 83 tests: auth, billing, client, d1, design-compat, intent, language, project-scan, queue-matrix, router, verify
+npm test               # 124 tests (node:test)
+npx tsc --noEmit -p .  # type check
 ```
 
-## Deploy order (exact)
+## Deploy
 
-1. `npm install` (installs wrangler)
-2. `npx wrangler kv namespace create KEYS` — put the id into `wrangler.jsonc`
-3. `npx wrangler d1 create sg16_logs` — put the id into `wrangler.jsonc`; then
-   `npx wrangler d1 execute sg16_logs --file schema.sql`
-4. VPS: `bash scripts/vps-setup-model.sh` (model server + tunnel)
-5. Cloudflare Access app on the tunnel hostname, service token only
-6. Secrets: `npx wrangler secret put MODEL_SHARED_SECRET`,
-   `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`
-   (no third-party AI API secret exists — there is no backup route)
-7. `npx wrangler deploy`, then attach the `mistralbrain.com` route to this
-   worker in the Cloudflare dashboard (Workers -> Triggers)
-8. Keys: `node scripts/make-key.mjs` + the printed `wrangler kv key put`
-9. Load test: `node scripts/loadtest.mjs keys.txt` (10 concurrent connections)
-
-Full runbook with cutover and security notes: `../docs/BRAIN-CORE-REBUILD.md`.
+Fresh accounts: `../docs/FRESH-DEPLOY.md` (local check -> GitHub -> Cloudflare
+-> brain server). Architecture and operations: `../docs/BRAIN-CORE-REBUILD.md`.

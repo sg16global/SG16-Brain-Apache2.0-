@@ -1,7 +1,7 @@
 name: Deploy brain-core Worker
 
 # GitHub -> Cloudflare CI/CD for the deterministic brain core.
-# Deploys ONLY the brain-core package; the inference VPS is never touched.
+# Deploys ONLY the brain-core package; the brain server is never touched.
 #
 # Required repository secrets (GitHub -> Settings -> Secrets):
 #   CLOUDFLARE_API_TOKEN    a token with Workers Scripts:Edit + KV:Edit + D1:Edit
@@ -14,7 +14,7 @@ name: Deploy brain-core Worker
 # wanted again, put back:
 #   push:
 #     branches: [main]
-#     paths: ["brain-core/**", "web/**"]
+#     paths: ["brain-core/**"]
 on:
   workflow_dispatch:
 

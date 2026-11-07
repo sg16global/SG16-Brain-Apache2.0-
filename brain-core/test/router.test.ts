@@ -126,9 +126,8 @@ async function makeEnv(overrides: Partial<Env> = {}) {
     LOGS: new FakeD1() as unknown as D1Database,
     QUEUE: queue as unknown as DurableObjectNamespace,
     MATRIX: matrix as unknown as DurableObjectNamespace,
-    MODEL_PROVIDER: "ollama",
     MODEL_URL: "https://internal.mistralbrain.com",
-    MODEL_NAME: "saiftechglobal/sg16-brain:q4_k_m",
+    MODEL_NAME: "saiftechglobal/sg16-brain:Q4_K_M",
     MODEL_NUM_CTX: "8192",
     MAX_OUTPUT_CHARS: "1000",
     INFERENCE_TIMEOUT_MS: "5000",
@@ -203,12 +202,12 @@ test("API key chat: model and meta reported; the SG16 self-check never runs for 
   };
   assert.equal(data.answer, "the answer");
   assert.equal(data.meta.engine, "model-vps");
-  assert.equal(data.meta.model, "saiftechglobal/sg16-brain:q4_k_m");
+  assert.equal(data.meta.model, "saiftechglobal/sg16-brain:Q4_K_M");
   assert.equal(data.meta.checked, false);
   assert.equal(data.meta.verified, true);
   assert.equal(data.meta.script, "latin");
   assert.equal(bodies.length, 1, "one call: no self-check for an API project, even with SELF_CHECK on");
-  assert.equal(bodies[0].model, "saiftechglobal/sg16-brain:q4_k_m");
+  assert.equal(bodies[0].model, "saiftechglobal/sg16-brain:Q4_K_M");
 });
 
 test("API bypass: no SG16 rules reach the model, only the project's own system, history and message", async () => {
@@ -320,7 +319,7 @@ test("model host down: honest 502, no other model or AI service is ever called",
   let calls = 0;
   modelHandler = async (url) => {
     calls += 1;
-    assert.ok(!url.startsWith("https://api.mistral.ai"), "no third-party AI API may be called");
+    assert.ok(url.startsWith(env.MODEL_URL + "/"), "only the configured brain server may ever be called");
     throw new Error("tunnel down");
   };
   const res = await call(env, "/v1/ask", "POST", key, { text: "hi there" });
@@ -387,15 +386,31 @@ test("state route reads and steps the matrix", async () => {
   assert.equal(read.status, 200);
 });
 
-test("health reports component status", async () => {
+test("health reports component status; the model is online when the brain server lists the SG16 Brain", async () => {
   const { env } = await makeEnv();
-  modelHandler = async () => new Response("ok", { status: 200 });
+  let probed = "";
+  modelHandler = async (href) => {
+    probed = href;
+    return Response.json({ models: [{ name: "saiftechglobal/sg16-brain:Q4_K_M", model: "saiftechglobal/sg16-brain:Q4_K_M" }] });
+  };
   const res = await call(env, "/v1/health", "GET", null);
   assert.equal(res.status, 200);
-  const data = await res.json() as { ok: boolean; kv: boolean; d1: boolean };
+  const data = await res.json() as { ok: boolean; kv: boolean; d1: boolean; model: boolean };
   assert.equal(data.ok, true);
   assert.equal(data.kv, true);
   assert.equal(data.d1, true);
+  assert.equal(data.model, true);
+  assert.equal(probed, "https://internal.mistralbrain.com/api/tags");
+});
+
+test("health: a brain server without the SG16 Brain installed is not online", async () => {
+  const { env } = await makeEnv();
+  modelHandler = async () => Response.json({ models: [{ name: "some-other-model:latest" }] });
+  const res = await call(env, "/v1/health", "GET", null);
+  assert.equal((await res.json() as { model: boolean }).model, false);
+  modelHandler = async () => new Response("ok", { status: 200 });
+  const plain = await call(env, "/v1/health", "GET", null);
+  assert.equal((await plain.json() as { model: boolean }).model, false, "a non-JSON 200 is not the brain");
 });
 
 test("unknown route => 404 machine code", async () => {
@@ -467,9 +482,9 @@ test("queue wait: MAX_QUEUE_WAIT_MS is the default and the ceiling; a project po
   assert.equal(await waitFor({ max_queue_ms: 600000 }), 120000, "but never a longer one than the env ceiling");
 });
 
-// ---- OpenAI-compatible door (/v1/chat/completions, /v1/models) -------------
+// ---- standard chat-completions door (/v1/chat/completions, /v1/models) ------
 
-test("openai compat: no key => 401 in the standard error shape", async () => {
+test("chat-completions: no key => 401 in the standard error shape", async () => {
   const { env } = await makeEnv();
   const res = await call(env, "/v1/chat/completions", "POST", null, { model: "sg16-brain", messages: [{ role: "user", content: "hi" }] });
   assert.equal(res.status, 401);
@@ -477,7 +492,7 @@ test("openai compat: no key => 401 in the standard error shape", async () => {
   assert.equal(data.error.type, "authentication_error");
 });
 
-test("openai compat: a sg16p_ project key gets a chat.completion through the same pipeline, rules as sent", async () => {
+test("chat-completions: a sg16p_ project key gets a chat.completion through the same pipeline, rules as sent", async () => {
   const { createProjectKey } = await import("../src/design-compat.ts");
   const secret = "project-key-secret-0123456789abcdef";
   const { env } = await makeEnv({ SG16_PROJECT_KEY_SECRET: secret });
@@ -513,7 +528,7 @@ test("openai compat: a sg16p_ project key gets a chat.completion through the sam
   assert.ok(!JSON.stringify(bodies[0].messages).includes("SG16"), "SG16's own prompt never reaches an API project's call");
 });
 
-test("openai compat: /v1/models lists sg16-brain; every request, code included, goes to the one SG16 brain", async () => {
+test("chat-completions: /v1/models lists sg16-brain; every request, code included, goes to the one SG16 brain", async () => {
   const { env, key } = await makeEnv();
   const list = await call(env, "/v1/models", "GET", key);
   assert.equal(list.status, 200);
@@ -528,10 +543,10 @@ test("openai compat: /v1/models lists sg16-brain; every request, code included, 
     messages: [{ role: "user", content: "fix this bug:\n```js\nconst x = 1\nconsole.log(y)\n```" }],
   });
   assert.equal(res.status, 200);
-  assert.deepEqual(models, ["saiftechglobal/sg16-brain:q4_k_m"]);
+  assert.deepEqual(models, ["saiftechglobal/sg16-brain:Q4_K_M"]);
 });
 
-test("openai compat: unsupported requests are refused clearly, never guessed", async () => {
+test("chat-completions: unsupported requests are refused clearly, never guessed", async () => {
   const { env, key } = await makeEnv();
   let calls = 0;
   modelHandler = async () => { calls += 1; return json({ message: { content: "x" } }); };
@@ -542,14 +557,14 @@ test("openai compat: unsupported requests are refused clearly, never guessed", a
     messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/png;base64,aGk=" } }] }],
   });
   assert.equal(image.status, 400);
-  const wrongModel = await call(env, "/v1/chat/completions", "POST", key, { model: "gpt-4o", messages: [{ role: "user", content: "hi" }] });
+  const wrongModel = await call(env, "/v1/chat/completions", "POST", key, { model: "another-model", messages: [{ role: "user", content: "hi" }] });
   assert.equal(wrongModel.status, 404);
   const lastNotUser = await call(env, "/v1/chat/completions", "POST", key, { model: "sg16-brain", messages: [{ role: "assistant", content: "hi" }] });
   assert.equal(lastNotUser.status, 400);
   assert.equal(calls, 0, "no refused request reaches the model");
 });
 
-test("openai compat: model down => 502 server_error; rate limit => 429 rate_limit_error", async () => {
+test("chat-completions: model down => 502 server_error; rate limit => 429 rate_limit_error", async () => {
   const { env, key } = await makeEnv();
   modelHandler = async () => { throw new Error("tunnel down"); };
   const down = await call(env, "/v1/chat/completions", "POST", key, { model: "sg16-brain", messages: [{ role: "user", content: "hi there" }] });

@@ -1,16 +1,18 @@
 # SG16 Brain — the exact inference format (for fine-tuning)
 
-Written 2026-11-06 from the code and from measurements on the studio PC. If the
-studio fine-tunes the brain, the training data should use **this** format, or
-the Modelfile template (section 3) must be changed to the format the training
+Written 2026-11-06 from the code and from measurements on the studio PC;
+updated 2026-11-07 for the published Ollama build. If the studio fine-tunes
+the brain, the training data should use **this** format, or the chat template
+of the published build (section 3) must be changed to the format the training
 used. Everything below was read from the files or measured, not assumed.
 
 ## 1. The weights
 
 | Field (GGUF header) | Value |
 |---|---|
-| file | `sg16-brain-Q4_K_M.gguf`, 7,477,727,648 bytes |
-| SHA-256 | `5f9a319c4d4412646f3c279d86bfaf913b15ac328008e6515822a42be9b3d0dd` (identical to the Ollama blob of `saiftechglobal/sg16-brain:q4_k_m`) |
+| build | `saiftechglobal/sg16-brain:Q4_K_M` on Ollama, ID `f4b21a5d4668` |
+| weights layer | 7,477,728,576 bytes, `sha256:966a7e76a38e90bbf46a8a56eea9f2a6bf7a8a16e2c705ae94bbc5ab89623dfd` |
+| `general.name` / `general.license` | `SG16 Brain` / `apache-2.0` (the header also carries the copyright and base-model attribution) |
 | `general.file_type` | 15 = Q4_K_M |
 | architecture | `llama`, 12B (Ollama: 12.2B parameters) |
 | layers / hidden / FFN | 40 / 5120 / 14336 |
@@ -42,7 +44,7 @@ API projects (`/v1/ask`, `/v1/chat/completions`, `/api/brain` with a key) send
 their **own** system prompt (optional), their own history and message; the SG16
 system prompt is not added. The same template applies.
 
-## 3. The template (`brain-core/model/Modelfile`) — "layout A"
+## 3. The template (shipped in the published build) — "layout A"
 
 ```
 <s>[INST]{system}
@@ -52,18 +54,21 @@ system prompt is not added. The same template applies.
 
 The system prompt rides in front of the **first** user turn (two newlines
 between). `<s>` is the BOS the runtime adds. Stop strings: `[INST]`, `[/INST]`,
-`</s>`. Sampling: `temperature 0.3`, `num_ctx 8192`; the Worker sends only
-`num_ctx` and sets no `num_predict` cap (an answer ends at EOS, at the 16,384-
-character output check, or at the 95 s time limit).
+`</s>`. Sampling (the build's own parameters): `temperature 0.7`, `top_k 40`,
+`top_p 0.9`, `repeat_penalty 1.1`, `num_ctx 16384`. The Worker overrides only
+`num_ctx` (8192) and sets no `num_predict` cap (an answer ends at EOS, at the
+16,384-character output check, or at the 95 s time limit).
 
-Verified 2026-11-06: Ollama `/api/chat` with this Modelfile and a hand-built raw
-layout-A prompt give byte-identical answers and identical prompt token counts
-(215 and 246 tokens for a 1-turn and a 5-turn test, temperature 0, seed 1).
+Verified 2026-11-06 (earlier local build, same template): Ollama `/api/chat`
+and a hand-built raw layout-A prompt give byte-identical answers and identical
+prompt token counts (215 and 246 tokens for a 1-turn and a 5-turn test,
+temperature 0, seed 1). The published build's template is byte-identical to
+the one tested.
 
-Mistral's official v3-tekken format ("layout B") puts the system prompt in front
-of the **last** user turn instead. To serve that format, the only change is this
-template line in the Modelfile: `{{ if and $.System (eq (len (slice $.Messages $i)) 1) }}`
-instead of `{{ if and $.System $first }}` (then re-run `ollama create`).
+The alternative layout ("layout B") puts the system prompt in front of the
+**last** user turn instead. To serve that format, the only change is this
+template line: `{{ if and $.System (eq (len (slice $.Messages $i)) 1) }}`
+instead of `{{ if and $.System $first }}` (then publish a new build).
 **Not tested yet** — verify it with the same raw-prompt comparison as above
 before serving it.
 

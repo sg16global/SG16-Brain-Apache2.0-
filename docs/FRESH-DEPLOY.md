@@ -15,6 +15,7 @@ Order matters: **check everything locally first, then GitHub, then Cloudflare.**
 |---|---|---|
 | Site address | `brain-core/wrangler.jsonc` `workers_dev: true` | the free `https://sg16-brain-core.<your-subdomain>.workers.dev` until a domain is added |
 | KV `KEYS`, D1 `LOGS` | `wrangler.jsonc` | created new by `scripts/fresh-setup.mjs` (no old ids in the file) |
+| Brain | `MODEL_NAME` var | `saiftechglobal/sg16-brain:Q4_K_M` — the published 7.5 GB build (ID `f4b21a5d4668`) |
 | Brain server | `MODEL_URL` var | empty = brain shows "offline" until the new server's tunnel exists |
 | Sign-in email | `send_email` binding + `EMAIL_FROM` | commented out until the new domain is on Email Sending |
 | Payment return page | — | the site's own address is always allowed |
@@ -32,10 +33,11 @@ node scripts/sync-web.mjs
 npx wrangler deploy --dry-run # builds the Worker, contacts nobody
 ```
 
-Then run it locally with the brain on this PC (Ollama with
-`saiftechglobal/sg16-brain:q4_k_m`) and open http://127.0.0.1:8787:
+Then run it locally with the brain on this PC and open http://127.0.0.1:8787:
 
 ```
+ollama pull saiftechglobal/sg16-brain:Q4_K_M   # 7.5 GB, once
+ollama list                                    # its ID must read f4b21a5d4668
 npx wrangler dev --local --var MODEL_URL:http://127.0.0.1:11434 \
   --var SG16_IDENTITY_SECRET:<any 32+ chars> --var SG16_ADMIN_PASSWORD:<a test password> \
   --var BILLING_SECRET:<any 32+ chars> --var SG16_PROJECT_KEY_SECRET:<any 32+ chars>
@@ -43,7 +45,7 @@ npx wrangler dev --local --var MODEL_URL:http://127.0.0.1:11434 \
 
 ## 2. GitHub (new repository)
 
-1. Push this project to the new repository `sg16global/SG16-Brain-Apache2.0-`.
+1. The project lives in `sg16global/SG16-Brain-Apache2.0-` (branch `main`).
 2. In the repository: Settings → Secrets and variables → Actions, add
    `CLOUDFLARE_API_TOKEN` (a token of the **new** account with Workers Scripts:Edit,
    KV:Edit, D1:Edit) and `CLOUDFLARE_ACCOUNT_ID` (the **new** account id).
@@ -87,12 +89,16 @@ First deploy: `npm run deploy`. Open the workers.dev address it prints.
 ## 4. The brain server (new OVH server)
 
 The tunnel needs a hostname on a domain in the new Cloudflare account, so this
-step waits for the domain. Then, on the server, as root, with the GGUF copied over:
+step waits for the domain. Then, on the server, as root, from a checkout of
+this repository:
 
 ```
-GGUF_PATH=/root/sg16-brain-Q4_K_M.gguf DOMAIN_INTERNAL=internal.your-domain.com \
-  bash brain-core/scripts/vps-setup-model.sh
+DOMAIN_INTERNAL=internal.your-domain.com bash brain-core/scripts/vps-setup-model.sh
 ```
+
+The script pulls `saiftechglobal/sg16-brain:Q4_K_M` from Ollama, refuses any
+build whose ID is not `f4b21a5d4668`, removes every other model, binds Ollama
+to 127.0.0.1 only and creates the tunnel.
 
 Then set `MODEL_URL` in `wrangler.jsonc` to `https://internal.your-domain.com`
 and lock that hostname with Cloudflare Access (service token → the two

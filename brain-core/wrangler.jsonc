@@ -51,12 +51,12 @@
     // hostname on the NEW domain, e.g. "https://internal.your-domain.com".
     // Empty = the brain reports offline (honest), nothing old is called.
     "MODEL_URL": "",
-    "MODEL_PROVIDER": "ollama",
-    "MODEL_NAME": "saiftechglobal/sg16-brain:q4_k_m",
-    "MODEL_HEALTH_PATH": "/api/tags",
+    // the one brain, exactly as published on Ollama (7.5 GB, 12.2B, Q4_K_M,
+    // manifest f4b21a5d4668) — https://ollama.com/saiftechglobal/sg16-brain:Q4_K_M
+    "MODEL_NAME": "saiftechglobal/sg16-brain:Q4_K_M",
     "MODEL_NUM_CTX": "8192",
     "MAX_OUTPUT_CHARS": "16384",
-    // the 12B Q4_K_M brain answers slower than the old 4B model; 95s stays under
+    // the 12B Q4_K_M brain needs time on CPU; 95s stays under
     // Cloudflare's ~100s origin-response cap on the tunnel. One chat holds the
     // slot for at most draft + retry + self-check = 3 x 95s = 285s < 300s lease.
     "INFERENCE_TIMEOUT_MS": "95000",

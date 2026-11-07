@@ -1,4 +1,4 @@
-// SG16 BRAIN CORE — billing math, ported verbatim from sg16/billing.py.
+// SG16 BRAIN CORE — billing math.
 //
 // Pure, stateless, no network: pass tiers, host-derived prices, the signed
 // duration-locked pass record, and Dodo Payments' Standard Webhooks signature

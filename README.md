@@ -1,154 +1,94 @@
-# Soverian-SG16-BRAIN
+# SOVEREIGN SG16 Brain
 
-**Sovereign SG16 Brain** — an independent, self-contained brain hosted on its own
-domain, **mistralbrain.com**. It has no external owner, no remote model API and
-no daemon. The whole engine is pure in-process mathematics, and the same build
-runs identically fully online or strictly air-gapped offline.
+**SG16 Brain** — the conversational AI of **SAIF TECH GLOBAL LLC**, live at
+**[mistralbrain.com](https://mistralbrain.com)**. This repository is the
+official, definitive home of the Brain project.
 
-> 100% fully independent · self-contained · open to everyone · Apache-2.0
+> Self-hosted · one brain · no third-party AI API · Apache-2.0
 
-```
-        ┌────────────────────────  SEALED HOUSING  ────────────────────────┐
-        │  north / east / south / west                                     │
-        │                                                                  │
-        │            ┌────────────  JOINT ROOM (3-GPT)  ────────────┐      │
-   in ──▶  MASTER     │  Shell GPT · Kali GPT · Terminal GPT         │     │
-        │  DOOR  ───▶ │  first gate drop: reject harm, never enter   │     │
-        │   (1)       └───────────────┬──────────────────────────────┘     │
-        │                             ▼ clean only                         │
-        │                    ┌────────────────────┐   audio  ┌──────────┐  │
-        │                    │  Devstral Small 2  │ ───────▶ │  Voxtral │  │
-        │                    │   head controller  │ ◀─────── │  (mini)  │  │
-        │                    └────────┬───────────┘  returns └──────────  │
-        │                             ▼                                    │
-   out ◀─  MASTER DOOR (same door, no re-block, entry seal attached)       │
-        └──────────────────────────────────────────────────────────────────┘
-```
+## Official links
 
-## The charter (baked into the weights, not bolted on)
+| | |
+|---|---|
+| Website | https://mistralbrain.com |
+| Source (this repository) | https://github.com/sg16global/SG16-Brain-Apache2.0- |
+| Models (Ollama) | https://ollama.com/saiftechglobal/sg16-brain |
+| The brain of mistralbrain.com | https://ollama.com/saiftechglobal/sg16-brain:Q4_K_M |
 
-1. **Absolute independence & open access.** No external ownership; open for everyone.
-2. **Extreme patience & politeness.** Never excited, never loses patience.
-3. **Idea ingesting.** Initiates with *"Share your idea first."*, listens, then solves.
-   If the solution is not liked it immediately says
-   *"Alright, I am providing the exact solution you are talking about."*
-4. **Aggressive-user escalation.** Two to three polite warnings; beyond the limit of
-   decency it issues the **device-authority notice** — a *simulated* deterrent screen;
-   it performs no device action and contacts no external authority (it cannot).
-5. **Strict anti-harm guardrails.** Harmful, socially disruptive and adult content is
-   rejected at the **first gate drop** and never reaches the core.
-6. **Zero hallucination.** Unknown topics get
-   *"Please give me a moment. I do not know this thing right now, I will find out and tell you."*
-   Arithmetic is **computed**, never recalled.
-7. **Model neutrality.** Never ranks other models; *"We are all good, we are all bad."*
+## All branches of the Brain
 
-The seven invariants are compiled into the 3-GPT panel as auditable fixed-point
-weights (`sg16/gate/weights.py`); `GET /api/weight?member=&feature=` prints the
-charter-level provenance of any single weight.
+### Model builds (published on Ollama, all Apache-2.0, 128K-token context window)
 
-## The mathematics (why online == offline, byte for byte)
+| Build | Size | Ollama ID | Use | Run |
+|---|---|---|---|---|
+| **`Q4_K_M`** | 7.5 GB | `f4b21a5d4668` | **the brain of mistralbrain.com** (integrated in this repository) | `ollama run saiftechglobal/sg16-brain:Q4_K_M` |
+| `Q8_0` | 13 GB | `ac9c1b995446` | higher fidelity, more memory | `ollama run saiftechglobal/sg16-brain:Q8_0` |
+| `f16` | 25 GB | `2c7021a7e77c` | full-precision weights | `ollama run saiftechglobal/sg16-brain:f16` |
 
-Everything is **Q16.16 fixed-point integer arithmetic** (`sg16/fixed.py`): no floats
-on the reasoning path, so results are identical on every host and in every deployment
-state. `exp/ln/tanh/sigmoid/sin/cos` are integer Taylor series (no libm), `sqrt` is an
-exact integer root. The structural matrix is synthesised from named seeds by SHA-256,
-so it is a fixed invariant, not a file that can drift. `GET /api/parity` proves the
-reasoning plans are byte-for-byte identical across transports.
+All three builds are the same 12.2B-parameter SG16 Brain at different
+precisions. Always name the build: the model has no `latest` tag, so
+`ollama run saiftechglobal/sg16-brain` without a tag does not resolve.
+mistralbrain.com serves **only** `Q4_K_M`.
 
-## Layout
+### Repository branches
+
+| Branch | Purpose |
+|---|---|
+| `main` | the released Brain — the single source of truth for mistralbrain.com |
+
+### Project parts
+
+| Part | Path | What it is |
+|---|---|---|
+| Brain core | [`brain-core/`](brain-core/) | Cloudflare Worker: keys, queue, verification, payments, accounts, and the site's API |
+| Public design | [`brain-core/site/`](brain-core/site/) | the mistralbrain.com pages (static export, committed, self-hosted fonts) |
+| Brain server setup | [`brain-core/scripts/vps-setup-model.sh`](brain-core/scripts/vps-setup-model.sh) | installs Ollama + `saiftechglobal/sg16-brain:Q4_K_M` behind a Cloudflare Tunnel |
+| Design source | [`pointoni/`](pointoni/) | the Next.js app the design was first exported from (`site/` has been edited since; see `AGENTS.md`) |
+| Docs | [`docs/`](docs/) | [fresh deployment](docs/FRESH-DEPLOY.md) · [architecture & runbook](docs/BRAIN-CORE-REBUILD.md) · [inference format](docs/FINE-TUNING-FORMAT.md) |
+
+## How it fits together
 
 ```
-sg16/            the brain (stdlib only, no network in the core)
-  fixed.py       Q16.16 kernel          tensor.py     integer tensor algebra
-  tokenizer.py   byte-level tokenizer   matrix.py     seeded structural matrix
-  retrieval.py   hashing vectorizer     calc.py       safe arithmetic
-  knowledge.py   sovereign KB           solution.py   idea -> solution composer
-  character.py   state machine          charter.py    the seven invariants
-  brain.py       orchestrator           transport.py  online/offline parity
-  engine/        Devstral core + Voxtral audio route
-  gate/          sealed housing, master door, 3-GPT panel, compiled weights
-  policy/        harm lexicon + deterministic features
-  server/        the ONLY network surface (stdlib HTTP host)
-web/             the UI layer (Vite source tree, served raw by the host)
-knowledge/       verifiable facts only (recall / compute / defer)
-config/          brain.json (single config, no env magic)
-tests/           327 tests, stdlib unittest
+visitor / API project ──▶ mistralbrain.com (Cloudflare Worker: brain-core)
+                              │  keys · one-at-a-time queue · verification · math
+                              ▼  Cloudflare Tunnel + Access (zero open ports)
+                          brain server: Ollama, 127.0.0.1 only
+                              saiftechglobal/sg16-brain:Q4_K_M  (the one brain)
 ```
 
-## Run it
+If the brain server is down, chat fails honestly with `502` — there is no
+backup AI service.
+
+## Run it locally
 
 ```bash
-python3 -m unittest discover -s tests -t .      # full suite (327 tests)
-python3 -m sg16.server 0.0.0.0 8080             # or: python3 scripts/serve.py
-# open http://localhost:8080
+ollama pull saiftechglobal/sg16-brain:Q4_K_M     # 7.5 GB, once; `ollama list` ID f4b21a5d4668
+cd brain-core
+npm install
+npm test                                         # 124 tests
+npx tsc --noEmit -p .
+node scripts/sync-web.mjs
+npx wrangler dev --local --var MODEL_URL:http://127.0.0.1:11434 \
+  --var SG16_IDENTITY_SECRET:<32+ chars> --var SG16_ADMIN_PASSWORD:<test password> \
+  --var BILLING_SECRET:<32+ chars> --var SG16_PROJECT_KEY_SECRET:<32+ chars>
+# open http://127.0.0.1:8787
 ```
 
-No third-party Python packages. No `pip install`. The UI needs no build step — the
-host serves `web/` as native ES modules — though `web/` is also a valid Vite project
-(`cd web && npm i && npm run dev`, API proxied to the host).
+Production deployment: [`docs/FRESH-DEPLOY.md`](docs/FRESH-DEPLOY.md).
 
-## HTTP API
+## API in one line
 
-| Method & path | Purpose |
-|---|---|
-| `POST /api/ingest` | `{text, session_id, audio_b64?, declared_transcript?}` → full transaction |
-| `POST /api/audio` | raw audio bytes; headers `X-Session-Id`, `X-Transcript` |
-| `POST /api/introspect` | `{text}` → gate verdict + features + retrieval + plan |
-| `GET /api/health` | readiness, digests, sealed topology |
-| `GET /api/charter` | invariants + canonical lines |
-| `GET /api/parity` | online/offline parity proof |
-| `GET /api/weight?member=&feature=` | charter provenance of one weight |
-| `POST /api/session/forget` | clear host-side conversation context (no session data returned) |
-| `POST /api/subscribe` | proxy-verified humanitarian record only; paid local issuance disabled |
-| `POST /api/dodo/checkout` | Dodo Payments MoR checkout session for one pass |
-| `POST /api/dodo/webhook` | signed Dodo payment confirmation (Standard Webhooks) |
-| `POST /api/dodo/confirm` | client pickup of the confirmed, duration-locked record |
+`POST https://mistralbrain.com/v1/ask` with `Authorization: Bearer <key>` and
+`{"kind":"chat","text":"..."}` — or any client that speaks the standard
+chat-completions format with base URL `https://mistralbrain.com/v1` and model
+`sg16-brain`. Full route list: [`brain-core/README.md`](brain-core/README.md).
 
-## Standalone application layer (web/)
+## Company
 
-* **Cinematic homepage** — the green/gold emblem sits at the top centre over the
-  crimson stage matrix; neon dashboard grid throughout.
-* **Buy API / API Portal** — prominent controls; the portal lists the endpoints and
-  issues an account-scoped API token stored hashed in the configured database.
-* **Premium passes** — 24h **$3** · 1-week **$5** · 15-day **$8** · 1-month **$15**,
-  sold through **Dodo Payments Merchant-of-Record** only when the operator
-  configures gateway credentials (`/api/dodo/checkout` → Dodo-hosted payment →
-  signed webhook confirmation correlated to a host-created checkout →
-  `/api/dodo/confirm`). Without gateway credentials paid checkout fails closed.
-  The client may cache a bearer pass record locally, but access is only granted
-  after the host verifies the token. Process-local pass/checkout state is lost
-  on restart; deployment logs and backups are operator concerns.
-* **Humanitarian exception** — a zero-rate record is issued only when an
-  operator-trusted proxy authenticates geo headers (`X-SG16-Proxy-Auth` plus
-  `CF-IPCountry` / `X-Vercel-IP-Country` / `X-SG16-Geo-Country` = `PS`/`PSE`).
-  Browser locale, JSON region claims and unauthenticated `X-SG16-Region` cannot
-  mint a free pass.
-* **Byte-stream delivery** — every asset and module is served by the sovereign host
-  itself (`X-SG16-Stream: binary`), no CDN, no external origin.
-* **Footer** carries the corporate footprint: *SAIF TECH GLOBAL LLC — Technology
-  Services | Software Development | AI Tools | Digital Products — 8206 LOUISIANA
-  BLVD NE, STE A #10595, ALBUQUERQUE, NM 87113, USA.*
+SAIF TECH GLOBAL LLC — Technology Services | Software Development | AI Tools |
+Digital Products — 8206 LOUISIANA BLVD NE, STE A #10595, ALBUQUERQUE, NM 87113, USA.
 
-## Deployment (mistralbrain.com)
+## License
 
-See `docs/deployment.md` for the reverse-proxy + TLS recipe and the air-gapped
-variant. Because the core has no network dependency, both deployments run the
-identical mathematics.
-
-## Honesty notes
-
-* The **device-authority notice is simulated** and says so in its payload and
-  fine print; the brain has no capability to lock hardware.
-* **Payments are live through Dodo Payments (MoR)** only when the operator
-  fills `billing.dodo` in `config/brain.json` (API key, webhook secret and one
-  product id per pass). With empty credentials paid checkout reports unavailable
-  on `/api/billing`. Webhook confirmations are verified with the Standard
-  Webhooks HMAC scheme, required to match a host-created checkout, amount and
-  USD currency, and humanitarian passes are structurally incapable of being
-  charged. Pass and pending-checkout state is currently in-memory.
-* **Speech-to-text is deferred, not faked.** Voxtral measures real acoustics
-  (RMS, peak, ZCR, 8-bin Goertzel spectrum) and reports them; the transcript is
-  deferred unless the caller declares one, which is labelled `declared-by-caller`.
-* **Retrieval is recall, not generation.** The knowledge base holds only verifiable
-  facts; anything else defers. This is how zero-hallucination is enforced
-  structurally.
+Apache License 2.0 — see [`LICENSE`](LICENSE). The model's own license ships
+inside each Ollama build.

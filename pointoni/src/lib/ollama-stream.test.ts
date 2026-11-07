@@ -17,8 +17,8 @@ afterEach(() => {
 });
 
 const line = (o: unknown) => JSON.stringify(o) + "\n";
-const piece = (content: string) => line({ model: "saiftechglobal/sg16-brain:q4_k_m", message: { role: "assistant", content }, done: false });
-const done = (reason = "stop") => line({ model: "saiftechglobal/sg16-brain:q4_k_m", message: { role: "assistant", content: "" }, done: true, done_reason: reason });
+const piece = (content: string) => line({ model: "saiftechglobal/sg16-brain:Q4_K_M", message: { role: "assistant", content }, done: false });
+const done = (reason = "stop") => line({ model: "saiftechglobal/sg16-brain:Q4_K_M", message: { role: "assistant", content: "" }, done: true, done_reason: reason });
 
 /** A streaming Response that emits `chunks`, then either ends or stalls until the request is aborted. */
 function streamOf(chunks: string[], opts: { stall?: boolean; signal?: AbortSignal } = {}): Response {

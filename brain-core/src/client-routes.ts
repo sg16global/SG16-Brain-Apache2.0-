@@ -1,6 +1,6 @@
 // SG16 BRAIN CORE — client routes for the sovereign web panel.
 //
-// The web client (../web, staged into ./client by scripts/sync-web.mjs) is
+// The web client (site/, staged into ./client by scripts/sync-web.mjs) is
 // served as static assets by this same Worker; these are the API endpoints
 // it consumes on the same origin:
 //
@@ -32,11 +32,11 @@ export interface ClientEnv {
   MODEL_NAME?: string;
 }
 
-/** The one and only brain: SG16 Brain, Q4_K_M weights (brain-core/model/Modelfile). */
-export const SG16_BRAIN_MODEL = "saiftechglobal/sg16-brain:q4_k_m";
+/** The one and only brain: SG16 Brain Q4_K_M, as published on Ollama (ollama.com/saiftechglobal/sg16-brain). */
+export const SG16_BRAIN_MODEL = "saiftechglobal/sg16-brain:Q4_K_M";
 
-// The eight published charter invariants (sg16/charter.py, carried over
-// unchanged — honest by design, limitations stated in public).
+// The eight published charter invariants — honest by design, limitations
+// stated in public.
 export const INVARIANTS = [
   {
     key: "independence",

@@ -1,6 +1,6 @@
 -- D1: logs and history for the brain core. Real events only; no synthetic rows.
--- Content of user messages/answers is NOT stored by default — only digests,
--- engine and verification outcome (policy:LOG_CONTENT=1 can enable full rows).
+-- Content of user messages/answers is NOT stored — only digests, engine and
+-- verification outcome.
 
 CREATE TABLE IF NOT EXISTS requests (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS requests (
   user_id    INTEGER NOT NULL,             -- owner = 1, same system for everyone
   project    TEXT    NOT NULL,
   kind       TEXT    NOT NULL,             -- chat | compute | state | health
-  engine     TEXT    NOT NULL,             -- model-vps | mistral-backup | core | none
+  engine     TEXT    NOT NULL,             -- model-vps | core | none
   http       INTEGER NOT NULL,
   latency_ms INTEGER NOT NULL,
   queue_ms   INTEGER NOT NULL DEFAULT 0,

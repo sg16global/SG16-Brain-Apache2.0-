@@ -1,7 +1,6 @@
-// SG16 BRAIN CORE — payment routes, ported from the old host's
-// sg16/server/app.py Dodo Payments pipeline. Paths and response shapes are
-// unchanged so the existing web frontend and the Dodo webhook endpoint keep
-// working after cutover:
+// SG16 BRAIN CORE — payment routes (Dodo Payments pipeline). Paths and
+// response shapes are the ones the design pages (site/) and the Dodo webhook
+// endpoint use:
 //
 //   POST /api/dodo/checkout   create a Dodo session (or proxy-verified
 //                              humanitarian record) for one pass
