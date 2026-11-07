@@ -9,7 +9,7 @@
 // All /api/* and /v1/* requests are handled by the Worker (run_worker_first),
 // never by these assets.
 
-import { cpSync, rmSync, mkdirSync, existsSync } from "node:fs";
+import { cpSync, rmSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -23,8 +23,10 @@ if (!existsSync(join(site, "index.html"))) {
   process.exit(1);
 }
 
-rmSync(client, { recursive: true, force: true });
+// empty client/ rather than delete it: on Windows a folder that an editor or
+// file watcher has open cannot be removed, but its contents can
 mkdirSync(client, { recursive: true });
+for (const entry of readdirSync(client)) rmSync(join(client, entry), { recursive: true, force: true });
 
 // the design front-end
 cpSync(site, client, { recursive: true });

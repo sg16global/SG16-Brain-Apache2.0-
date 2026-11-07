@@ -13,7 +13,8 @@ Order matters: **check everything locally first, then GitHub, then Cloudflare.**
 
 | Setting | Where | Fresh value |
 |---|---|---|
-| Site address | `brain-core/wrangler.jsonc` `workers_dev: true` | the free `https://sg16-brain-core.<your-subdomain>.workers.dev` until a domain is added |
+| Worker | `brain-core/wrangler.jsonc` `name` | `soverian-sg16-brain` (a Worker created in the dashboard and connected to GitHub must use exactly this name) |
+| Site address | `brain-core/wrangler.jsonc` `workers_dev: true` | the free `https://soverian-sg16-brain.<your-subdomain>.workers.dev` until a domain is added |
 | KV `KEYS`, D1 `LOGS` | `wrangler.jsonc` | created new by `scripts/fresh-setup.mjs` (no old ids in the file) |
 | Brain | `MODEL_NAME` var | `saiftechglobal/sg16-brain:Q4_K_M` — the published 7.5 GB build (ID `f4b21a5d4668`) |
 | Brain server | `/admin` → BRAIN SERVER (or the `MODEL_URL` var) | empty = brain shows "offline" until a server is connected; any server works, no redeploy needed to change it |
@@ -54,6 +55,21 @@ npx wrangler dev --local --var MODEL_URL:http://127.0.0.1:11434 \
    -> Run workflow) only after step 3 below. Turn automatic deploys back on
    (the `push:` trigger noted in the file) once the new setup is stable.
 
+### Or: a Worker connected to GitHub (Workers Builds)
+
+Cloudflare dashboard → Workers & Pages → Create → Import a repository:
+
+| Setting | Value |
+|---|---|
+| Repository / branch | `sg16global/SG16-Brain-Apache2.0-` / `main` |
+| Worker name | `soverian-sg16-brain` (must match `wrangler.jsonc`) |
+| Root directory | `brain-core` |
+| Build command | *(empty: `wrangler.jsonc` stages the site itself)* |
+| Deploy command | `npx wrangler deploy` |
+
+Then add the Worker's secrets (Settings → Variables and Secrets, type
+**Secret**): the list in step 3 below.
+
 ## 3. Cloudflare (new account) — once
 
 From `brain-core/`, logged in to the **new** account:
@@ -65,6 +81,14 @@ node scripts/fresh-setup.mjs --yes    # creates KV sg16-keys + D1 sg16_logs, wri
 ```
 
 Commit the updated `wrangler.jsonc` (the ids are not secrets).
+
+If the KV namespace and D1 database were created in the dashboard instead
+(as on 2026-11-08: KV `SOVERIAN_KV`, D1 `soverian-sg16-brain`), their ids are
+already in `wrangler.jsonc`; skip `fresh-setup.mjs` and load the tables once:
+
+```
+npx wrangler d1 execute soverian-sg16-brain --remote --file schema.sql
+```
 
 Secrets (each command asks for the value; use new random values, 32+ characters,
 except the passwords and the Dodo values):
@@ -95,6 +119,18 @@ this repository:
 ```
 DOMAIN_INTERNAL=internal.your-domain.com bash brain-core/scripts/vps-setup-model.sh
 ```
+
+With a tunnel created in the dashboard (Zero Trust → Networks → Tunnels), give
+the script its install token instead of running `cloudflared login`:
+
+```
+read -rs TUNNEL_TOKEN && export TUNNEL_TOKEN      # paste the eyJ... token, Enter
+DOMAIN_INTERNAL=internal.your-domain.com bash brain-core/scripts/vps-setup-model.sh
+```
+
+and set the tunnel's public hostname in the dashboard: `internal.your-domain.com`
+→ HTTP `localhost:8081`, with HTTP Settings → HTTP Host Header `localhost:8081`
+(Ollama refuses any other host name).
 
 The script pulls `saiftechglobal/sg16-brain:Q4_K_M` from Ollama, refuses any
 build whose ID is not `f4b21a5d4668`, removes every other model, binds Ollama

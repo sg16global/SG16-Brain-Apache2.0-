@@ -8,16 +8,29 @@
 # The published package carries its own weights, chat template, stop tokens,
 # system prompt and license; nothing is rebuilt or re-templated here.
 #
-#   DOMAIN_INTERNAL=internal.your-domain.com bash scripts/vps-setup-model.sh
+# Two ways to run the tunnel:
+#
+#   A. Dashboard tunnel (token) — the tunnel was created in Cloudflare Zero
+#      Trust -> Networks -> Tunnels, which gave an install token:
+#        read -rs TUNNEL_TOKEN && export TUNNEL_TOKEN     # paste the token, Enter
+#        DOMAIN_INTERNAL=internal.your-domain.com bash scripts/vps-setup-model.sh
+#      Its public hostname is set in the dashboard, pointing at
+#      http://localhost:$MODEL_PORT with HTTP Host Header "localhost:$MODEL_PORT".
+#
+#   B. Tunnel created here — after 'cloudflared login':
+#        DOMAIN_INTERNAL=internal.your-domain.com bash scripts/vps-setup-model.sh
 #
 # What this script does:
 #   1. installs/upgrades Ollama and binds it to 127.0.0.1 ONLY (never a public port)
 #   2. pulls saiftechglobal/sg16-brain:Q4_K_M and checks its manifest id
 #   3. removes every other model from this box (one brain only)
-#   4. installs cloudflared and creates the tunnel $DOMAIN_INTERNAL (a hostname
-#      on your Cloudflare account's domain) -> http://127.0.0.1:$MODEL_PORT
+#   4. installs cloudflared and runs the tunnel (A: from the token; B: creates
+#      $DOMAIN_INTERNAL -> http://127.0.0.1:$MODEL_PORT)
 #   5. proves local inference and the tunnel, then prints the Cloudflare
 #      Access + Worker secret steps you must run
+#
+# The token is never written to this repository; cloudflared keeps it in its
+# own service unit on this server.
 #
 # Context cap is enforced twice: OLLAMA_CONTEXT_LENGTH=8192 here, and
 # options.num_ctx=8192 in every Worker request.
@@ -32,6 +45,8 @@ MODEL_PORT="${MODEL_PORT:-8081}"
 # overrides the local config.yml written below.
 DOMAIN_INTERNAL="${DOMAIN_INTERNAL:-}"
 TUNNEL_NAME="${TUNNEL_NAME:-sg16-model}"
+# A dashboard tunnel's install token (way A). Empty = way B (cloudflared login).
+TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
 CTX="${CTX:-8192}"
 # The one brain. Keep in sync with wrangler.jsonc MODEL_NAME.
 MODEL_NAME="${MODEL_NAME:-saiftechglobal/sg16-brain:Q4_K_M}"
@@ -48,6 +63,9 @@ lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 [ "$(id -u)" = 0 ] || die "run as root"
 [ -n "$DOMAIN_INTERNAL" ] || die "set DOMAIN_INTERNAL to the tunnel hostname on your domain, e.g. DOMAIN_INTERNAL=internal.your-domain.com"
+case "$DOMAIN_INTERNAL" in
+  *://*|*/*) die "DOMAIN_INTERNAL is a hostname only (internal.your-domain.com), without https:// or a path" ;;
+esac
 # a "16 GB" server reports a little under 16000 MiB; the brain needs ~9 GB (weights + 8K KV cache)
 free -m | awk 'NR==2{ if ($2 < 15000) exit 1 }' || die "this box needs a 16 GB server for the 12B Q4_K_M brain + its 8K KV cache"
 # the pull needs ~7.5 GB of disk for the weights, plus headroom
@@ -60,9 +78,17 @@ command -v cloudflared >/dev/null 2>&1 || {
   curl -fL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${arch}.deb" -o /tmp/cloudflared.deb
   dpkg -i /tmp/cloudflared.deb
 }
-mkdir -p "$HOME/.cloudflared"   # 'cloudflared login' writes its cert.pem here
-cloudflared tunnel list >/dev/null 2>&1 \
-  || die "cloudflared is not authenticated. Run 'cloudflared login' once (it prints a URL — open it in your browser and pick your domain's zone), then re-run this script. Nothing installed yet, no model touched."
+if [ -n "$TUNNEL_TOKEN" ]; then
+  # way A: the token is base64 JSON {"a": account, "t": tunnel id, "s": secret}
+  tok="$TUNNEL_TOKEN"; while [ $(( ${#tok} % 4 )) -ne 0 ]; do tok="$tok="; done
+  TUNNEL_ID="$(printf '%s' "$tok" | base64 -d 2>/dev/null | grep -o '"t":"[0-9a-f-]*"' | cut -d'"' -f4 || true)"
+  [ -n "$TUNNEL_ID" ] || die "TUNNEL_TOKEN is not a Cloudflare tunnel token (copy the long eyJ... value from the dashboard's install command). Nothing installed yet, no model touched."
+  say "dashboard tunnel token for tunnel $TUNNEL_ID"
+else
+  mkdir -p "$HOME/.cloudflared"   # 'cloudflared login' writes its cert.pem here
+  cloudflared tunnel list >/dev/null 2>&1 \
+    || die "cloudflared is not authenticated. Either set TUNNEL_TOKEN (dashboard tunnel) or run 'cloudflared login' once (it prints a URL — open it in your browser and pick your domain's zone), then re-run this script. Nothing installed yet, no model touched."
+fi
 
 if ss -ltn "sport = :$MODEL_PORT" | grep -q LISTEN; then
   ss -ltnp "sport = :$MODEL_PORT" 2>/dev/null | grep -q 'ollama' \
@@ -108,6 +134,30 @@ say "models now on this box:"; ollama list
 say "model server: ollama on 127.0.0.1:$MODEL_PORT, ctx $CTX, one brain, /api/chat"
 
 # ---- 4. cloudflare tunnel (cloudflared installed + authed in the preflight) --
+if [ -n "$TUNNEL_TOKEN" ]; then
+  # way A: the dashboard holds the routing; cloudflared only needs the token.
+  # A re-run replaces the existing service so the newest token wins.
+  if [ -f /etc/systemd/system/cloudflared.service ]; then
+    say "replacing the existing cloudflared service"
+    systemctl stop cloudflared 2>/dev/null || true
+    cloudflared service uninstall 2>/dev/null || true
+    rm -f /etc/systemd/system/cloudflared.service
+    systemctl daemon-reload
+  fi
+  cloudflared service install "$TUNNEL_TOKEN" >/dev/null || die "cloudflared service install failed"
+  chmod 600 /etc/systemd/system/cloudflared.service 2>/dev/null || true   # it holds the token
+  systemctl daemon-reload
+  systemctl enable cloudflared >/dev/null 2>&1 || true
+  systemctl restart cloudflared
+  say "waiting for the tunnel to connect to Cloudflare..."
+  for _ in $(seq 1 30); do
+    journalctl -u cloudflared --since "-2min" --no-pager 2>/dev/null | grep -q "Registered tunnel connection" && break
+    sleep 2
+  done
+  journalctl -u cloudflared --since "-2min" --no-pager 2>/dev/null | grep -q "Registered tunnel connection" \
+    || die "the tunnel did not connect. Check: systemctl status cloudflared ; journalctl -u cloudflared -n 50"
+  say "tunnel $TUNNEL_ID connected (dashboard status: HEALTHY)"
+else
 cloudflared tunnel list 2>/dev/null | grep -q "$TUNNEL_NAME" || cloudflared tunnel create "$TUNNEL_NAME"
 
 TUNNEL_ID="$(cloudflared tunnel list | awk -v n="$TUNNEL_NAME" '$2 == n { print $1; exit }')"
@@ -132,6 +182,9 @@ credentials-file: /etc/cloudflared/$TUNNEL_ID.json
 ingress:
   - hostname: $DOMAIN_INTERNAL
     service: http://127.0.0.1:$MODEL_PORT
+    originRequest:
+      # Ollama on 127.0.0.1 answers 403 to any other Host header
+      httpHostHeader: localhost:$MODEL_PORT
   - service: http_status:404
 EOF
 # Our own unit, run from config.yml. ('cloudflared service install <arg>'
@@ -154,6 +207,7 @@ UNIT
 systemctl daemon-reload
 systemctl enable cloudflared
 systemctl restart cloudflared
+fi
 
 # ---- 5. local loop: prove the brain answers before anything else ------------
 sleep 3
@@ -174,8 +228,9 @@ for _ in $(seq 1 12); do
   esac
 done
 case "$tunnel_code" in
-  200|401|403) say "tunnel OK: https://$DOMAIN_INTERNAL routes to 127.0.0.1:$MODEL_PORT" ;;
-  *) die "https://$DOMAIN_INTERNAL does not route to the model server (last HTTP code: $tunnel_code). Check: systemctl status cloudflared ; cloudflared tunnel list ; cat /etc/cloudflared/config.yml" ;;
+  200|401|403) say "tunnel OK: https://$DOMAIN_INTERNAL answers (HTTP $tunnel_code; 403 = Cloudflare Access is guarding it)" ;;
+  *) [ -n "$TUNNEL_TOKEN" ] && say "WARNING: https://$DOMAIN_INTERNAL does not answer yet (HTTP $tunnel_code). The brain and the tunnel are running; add the public hostname in the dashboard: Zero Trust -> Networks -> Tunnels -> this tunnel -> Public Hostname -> $DOMAIN_INTERNAL -> HTTP localhost:$MODEL_PORT, HTTP Host Header localhost:$MODEL_PORT." && exit 0
+     die "https://$DOMAIN_INTERNAL does not route to the model server (last HTTP code: $tunnel_code). Check: systemctl status cloudflared ; cloudflared tunnel list ; cat /etc/cloudflared/config.yml" ;;
 esac
 
 cat <<NEXT
@@ -184,7 +239,7 @@ cat <<NEXT
 
  1. Cloudflare Zero Trust -> Access -> Applications: add a self-hosted app for
       $DOMAIN_INTERNAL
-    policy: deny all, EXCEPT a Service Token. Note the Client ID + Secret.
+    policy action "Service Auth", include: your Service Token (nothing else).
  2. From your PC, set the Worker's secrets:
       cd brain-core
       npx wrangler secret put CF_ACCESS_CLIENT_ID      # paste the Client ID

@@ -1,9 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "sg16-brain-core",
+  // Separate Worker for the new system (2026-11-08). NOT "sg16-brain-core":
+  // that name is the live mistralbrain.com Worker and must never be deployed over.
+  "name": "soverian-sg16-brain",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
+  // the NEW Cloudflare account (2026-11-08): deploys can only land here
+  "account_id": "3676a09b6ca7c6fb929833cb2e4d69f6",
 
 
   "observability": { "enabled": true },
@@ -14,6 +18,12 @@
   //   "routes": [{ "pattern": "your-domain.com/*", "zone_name": "your-domain.com" }],
   // (see docs/FRESH-DEPLOY.md).
   "workers_dev": true,
+  "preview_urls": false,
+
+  // client/ is generated, not committed: every deploy (this PC or a Worker
+  // connected to GitHub) first stages it from site/. Only site/ changes
+  // re-run it under `wrangler dev`.
+  "build": { "command": "node scripts/sync-web.mjs", "watch_dir": "site" },
 
   "assets": {
     "directory": "./client",
@@ -21,14 +31,15 @@
     "run_worker_first": ["/*"]
   },
 
-  // Fresh storage and database in the NEW account: `node scripts/fresh-setup.mjs --yes`
-  // creates them, writes their ids here and loads schema.sql. Never reuse old ids.
+  // Fresh storage and database, created by the owner in the NEW account
+  // (2026-11-08): KV "SOVERIAN_KV" and D1 "soverian-sg16-brain". Load the
+  // tables once: npx wrangler d1 execute soverian-sg16-brain --remote --file schema.sql
   "kv_namespaces": [
-    { "binding": "KEYS" }
+    { "binding": "KEYS", "id": "b19a7624cea84f5cabb2d92f4a155668" }
   ],
 
   "d1_databases": [
-    { "binding": "LOGS", "database_name": "sg16_logs" }
+    { "binding": "LOGS", "database_name": "soverian-sg16-brain", "database_id": "eecde4ef-563a-4c38-8c50-e2c157d923df" }
   ],
 
   // visitor sign-in codes (src/accounts.ts): Cloudflare Email Sending needs the
@@ -47,10 +58,10 @@
   ],
 
   "vars": {
-    // the brain server (Ollama on the new VPS) behind its Cloudflare Tunnel
-    // hostname on the NEW domain, e.g. "https://internal.your-domain.com".
-    // Empty = the brain reports offline (honest), nothing old is called.
-    "MODEL_URL": "",
+    // the brain server (Ollama on the OVH VPS, 2026-11-08) behind the
+    // Cloudflare Tunnel hostname. /admin -> BRAIN SERVER can switch it at any
+    // time without a redeploy; this is only the default.
+    "MODEL_URL": "https://internal.mistralbrain.com",
     // the one brain, exactly as published on Ollama (7.5 GB, 12.2B, Q4_K_M,
     // manifest f4b21a5d4668) — https://ollama.com/saiftechglobal/sg16-brain:Q4_K_M
     "MODEL_NAME": "saiftechglobal/sg16-brain:Q4_K_M",
