@@ -17,7 +17,8 @@ import { authenticate, loadPolicy, parseAsk } from "./auth.ts";
 import { detectScript } from "./detect.ts";
 import { systemPrompt, messagesFor, apiMessages, checkMessages } from "./prompt.ts";
 import { verifyOutput, requestAllowed } from "./verify.ts";
-import { callModel, ModelError, sameModel } from "./model-client.ts";
+import { callModel, ModelError, probeServer } from "./model-client.ts";
+import { adminGatewayRoute, effectiveBrainServer } from "./admin-gateway.ts";
 import { freeTokenAllowance, type TokenBalance } from "./tokens.ts";
 import type { SendEmailBinding } from "./accounts.ts";
 import { withByteRange } from "./media-range.ts";
@@ -43,7 +44,7 @@ export interface Env {
 
   ASSETS: Fetcher;              // the staged web client (scripts/sync-web.mjs)
 
-  MODEL_URL: string;              // set via wrangler var after the tunnel exists
+  MODEL_URL: string;              // the deploy-time brain server; /admin BRAIN SERVER overrides it
   MODEL_NAME: string;            // the one brain: saiftechglobal/sg16-brain:Q4_K_M (published on Ollama)
   MODEL_NUM_CTX: string;
   MAX_OUTPUT_CHARS: string;
@@ -115,6 +116,9 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   try {
     if (request.method === "GET" && path === "/v1/health") return await health(env, started);
     if (path.startsWith("/api/")) {
+      // the operator's gateway: BRAIN SERVER (any server) and PROJECT RULES
+      const gateway = await adminGatewayRoute(request, path, env);
+      if (gateway) return gateway;
       const design = await designCompatRoute(request, path, {
         env,
         chatDoor: (payload, record) => askParsed(payload, env, ctx, record, started),
@@ -276,7 +280,7 @@ async function askParsed(
   const detect = detectScript(parsed.text);
   const messages = website
     ? messagesFor(systemPrompt(detect), parsed.text, parsed.history)
-    : apiMessages(parsed.system, parsed.history, parsed.text);
+    : apiMessages(parsed.system, parsed.history, parsed.text, policy.system);
   const maxQueueMs = Math.min(policy.max_queue_ms, queueCeilingMs);
 
   // Free tier (website visitors without a pass): a one-time allowance of real
@@ -317,7 +321,7 @@ async function askParsed(
   // One brain: saiftechglobal/sg16-brain:Q4_K_M, self-hosted on Ollama. There is no other model and no
   // third-party AI API in this system — if the model host is down, the
   // request fails honestly (502).
-  const modelCfg = modelCfgOf(env, env.MODEL_NAME);
+  const modelCfg = await modelCfgOf(env, env.MODEL_NAME);
   const meter: TokenMeter = { tokens: 0 };
 
   try {
@@ -368,7 +372,7 @@ interface TokenMeter { tokens: number }
 // the self-check pass ever runs
 async function attempt(
   env: Env,
-  cfg: ReturnType<typeof modelCfgOf>,
+  cfg: ModelCfg,
   messages: unknown,
   policy: Policy,
   meter: TokenMeter,
@@ -387,15 +391,20 @@ async function attempt(
   throw new HttpError(502, "E_UNVERIFIED");
 }
 
-function modelCfgOf(env: Env, model: string) {
+type ModelCfg = Awaited<ReturnType<typeof modelCfgOf>>;
+
+// the brain server comes from /admin BRAIN SERVER when the operator saved
+// one, else from the MODEL_URL deploy setting (admin-gateway.ts)
+async function modelCfgOf(env: Env, model: string) {
+  const server = await effectiveBrainServer(env);
   return {
-    url: env.MODEL_URL,
+    url: server.url,
     model,
     numCtx: Number(env.MODEL_NUM_CTX) || 8192,
     timeoutMs: Number(env.INFERENCE_TIMEOUT_MS) || 60000,
-    sharedSecret: env.MODEL_SHARED_SECRET ?? "",
-    accessClientId: env.CF_ACCESS_CLIENT_ID ?? "",
-    accessClientSecret: env.CF_ACCESS_CLIENT_SECRET ?? "",
+    sharedSecret: server.sharedSecret,
+    accessClientId: server.accessClientId,
+    accessClientSecret: server.accessClientSecret,
   };
 }
 
@@ -405,7 +414,7 @@ function modelCfgOf(env: Env, model: string) {
 // away — the answer simply goes out unchecked (checked: false in meta).
 async function selfCheck(
   env: Env,
-  cfg: ReturnType<typeof modelCfgOf>,
+  cfg: ModelCfg,
   question: string,
   draft: string,
   policy: Policy,
@@ -619,26 +628,10 @@ async function healthProbe(env: Env): Promise<HealthProbe> {
     probe.power = (await queueDo(env, "/power")).on !== false;
   } catch { /* queue stays false */ }
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
     // the model counts as online only when the brain server lists the one
     // brain (MODEL_NAME) among its installed models — a server that answers
     // without the SG16 Brain installed is not "online"
-    const response = await fetch(env.MODEL_URL + "/api/tags", {
-      headers: {
-        "authorization": `Bearer ${env.MODEL_SHARED_SECRET ?? ""}`,
-        "CF-Access-Client-Id": env.CF_ACCESS_CLIENT_ID ?? "",
-        "CF-Access-Client-Secret": env.CF_ACCESS_CLIENT_SECRET ?? "",
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (response.ok) {
-      const tags = await response.json().catch(() => null) as { models?: Array<{ name?: unknown; model?: unknown }> } | null;
-      probe.model = Array.isArray(tags?.models) && tags.models.some((m) =>
-        (typeof m?.name === "string" && sameModel(m.name, env.MODEL_NAME)) ||
-        (typeof m?.model === "string" && sameModel(m.model, env.MODEL_NAME)));
-    }
+    probe.model = (await probeServer(await effectiveBrainServer(env), env.MODEL_NAME, 5000)).modelInstalled;
   } catch { /* model stays false */ }
   return probe;
 }

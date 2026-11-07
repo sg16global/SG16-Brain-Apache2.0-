@@ -31,11 +31,13 @@ export function systemPrompt(detect: DetectResult): string {
 
 // API projects (owner decision 2026-10-19): another project connecting with
 // its key gets the brain clean — none of SG16's own rules above. Only the
-// project's own rules (its `system`), its history and its message go to the
-// model, exactly as sent.
-export function apiMessages(system: string | undefined, history: readonly ChatTurn[] | undefined, userText: string): ChatTurn[] {
+// project's own rules, its history and its message go to the model, exactly
+// as sent. The project's rules are the operator's stored instructions for
+// that project (/admin PROJECT RULES), then the `system` the call sends.
+export function apiMessages(system: string | undefined, history: readonly ChatTurn[] | undefined, userText: string, stored?: string): ChatTurn[] {
   const messages: ChatTurn[] = [];
-  if (system) messages.push({ role: "system", content: system });
+  const rules = [stored, system].filter((part): part is string => typeof part === "string" && part.trim() !== "").join("\n\n");
+  if (rules) messages.push({ role: "system", content: rules });
   for (const turn of history ?? []) messages.push(turn);
   messages.push({ role: "user", content: userText });
   return messages;

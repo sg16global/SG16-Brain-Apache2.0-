@@ -15,6 +15,9 @@ export interface Policy {
   max_queue_ms: number;        // how long a request may wait for the model slot
   require_json: boolean;       // answers must be a JSON object {answer: ...}
   blocked_patterns: string[];  // regexes (operator-configured, per project)
+  /** API projects only: the project's own instructions for the brain, set by
+   * the operator on /admin (PROJECT RULES); sent before the caller's `system` */
+  system?: string;
 }
 
 export const DEFAULT_POLICY: Policy = {

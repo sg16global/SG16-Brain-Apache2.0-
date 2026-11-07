@@ -16,7 +16,7 @@ Order matters: **check everything locally first, then GitHub, then Cloudflare.**
 | Site address | `brain-core/wrangler.jsonc` `workers_dev: true` | the free `https://sg16-brain-core.<your-subdomain>.workers.dev` until a domain is added |
 | KV `KEYS`, D1 `LOGS` | `wrangler.jsonc` | created new by `scripts/fresh-setup.mjs` (no old ids in the file) |
 | Brain | `MODEL_NAME` var | `saiftechglobal/sg16-brain:Q4_K_M` — the published 7.5 GB build (ID `f4b21a5d4668`) |
-| Brain server | `MODEL_URL` var | empty = brain shows "offline" until the new server's tunnel exists |
+| Brain server | `/admin` → BRAIN SERVER (or the `MODEL_URL` var) | empty = brain shows "offline" until a server is connected; any server works, no redeploy needed to change it |
 | Sign-in email | `send_email` binding + `EMAIL_FROM` | commented out until the new domain is on Email Sending |
 | Payment return page | — | the site's own address is always allowed |
 | Dodo products | `DODO_PRODUCT_IDS` | the same four products as before |
@@ -100,9 +100,17 @@ The script pulls `saiftechglobal/sg16-brain:Q4_K_M` from Ollama, refuses any
 build whose ID is not `f4b21a5d4668`, removes every other model, binds Ollama
 to 127.0.0.1 only and creates the tunnel.
 
-Then set `MODEL_URL` in `wrangler.jsonc` to `https://internal.your-domain.com`
-and lock that hostname with Cloudflare Access (service token → the two
-`CF_ACCESS_*` secrets).
+Lock that hostname with Cloudflare Access (service token). Then connect it,
+either way:
+
+- **On `/admin` → BRAIN SERVER** (recommended, no redeploy): enter
+  `https://internal.your-domain.com`, choose CLOUDFLARE SECRETS (after putting
+  the token in the two `CF_ACCESS_*` secrets) or ENTER HERE (paste the token's
+  client ID and secret; stored encrypted), TEST CONNECTION, SAVE & CONNECT.
+- or set `MODEL_URL` in `wrangler.jsonc` and redeploy.
+
+Moving to another server later is the same step on the new machine; the
+setting on `/admin` always wins over `MODEL_URL`.
 
 ## 5. When the new domain exists
 

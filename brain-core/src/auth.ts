@@ -66,6 +66,7 @@ export async function loadPolicy(store: KeyStore, project: string, defaults: Pol
       max_queue_ms: typeof p.max_queue_ms === "number" && p.max_queue_ms >= 0 ? p.max_queue_ms : defaults.max_queue_ms,
       require_json: typeof p.require_json === "boolean" ? p.require_json : defaults.require_json,
       blocked_patterns: Array.isArray(p.blocked_patterns) ? p.blocked_patterns.filter((x) => typeof x === "string") : defaults.blocked_patterns,
+      ...(typeof p.system === "string" && p.system.trim() ? { system: p.system } : {}),
     };
   } catch {
     return defaults;

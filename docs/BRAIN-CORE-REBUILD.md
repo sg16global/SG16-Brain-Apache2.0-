@@ -97,6 +97,80 @@ sign-in is not switched on yet".
   good: `401`). Keys called in the last 24 h show green; never-used and idle
   keys are marked UNUSED. Stored in KV (`projctl:<key id>`), so a switch
   reaches every edge within about a minute.
+- **BRAIN SERVER** (`site/sg16-gateway.js`, `src/admin-gateway.ts`,
+  `GET|POST|DELETE /api/admin/brain-server`, `POST /api/admin/brain-server/test`):
+  see "Connect any brain server" below.
+- **PROJECT RULES and NEW KEY** (`site/sg16-projects.js`): see "API projects"
+  below.
+
+## Connect any brain server
+
+The core is not tied to one server. Any machine that runs Ollama with
+`saiftechglobal/sg16-brain:Q4_K_M` can be the brain:
+
+1. On the new server (Ubuntu/Debian, 16 GB RAM), as root:
+   `DOMAIN_INTERNAL=internal.your-domain.com bash brain-core/scripts/vps-setup-model.sh`.
+   It installs Ollama, pulls the brain, checks its ID, keeps Ollama on
+   127.0.0.1 and opens a Cloudflare Tunnel to that hostname.
+2. Lock the hostname with Cloudflare Access (service token).
+3. On `/admin` → **BRAIN SERVER**: enter `https://internal.your-domain.com`,
+   choose the door credentials, press **TEST CONNECTION** and then
+   **SAVE & CONNECT**. No redeploy; every Cloudflare location uses the new
+   server within about a minute (KV read cache: 30 s).
+
+Door credentials:
+
+| Choice | What is sent to the brain server |
+|---|---|
+| CLOUDFLARE SECRETS (default) | the deployment's `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`, `MODEL_SHARED_SECRET` |
+| ENTER HERE | values typed on `/admin`; stored in KV `brain:server` encrypted with AES-GCM (key derived from `SG16_IDENTITY_SECRET` by HKDF), never sent back to the browser; a blank field keeps the saved value |
+| NONE | no credentials (only for a server that is already private, e.g. local testing) |
+
+Addresses must be `https://` (any host, optional path); `http://` is accepted
+only for this machine (`localhost`, `127.0.0.1`). **USE DEPLOY SETTING** deletes
+the saved server and goes back to `MODEL_URL`. If `SG16_IDENTITY_SECRET`
+changes, saved custom credentials can no longer be read; the panel says so
+and they must be entered again. The test reports: connected and the brain
+installed, the server answers but the brain is missing (with the models it
+found), the door refused (401/403), timeout, or not reachable.
+
+## API projects (other projects using the brain)
+
+The owner's other projects connect with their own key. Every project is
+independent of the website: none of the website's system prompt, self-check
+or free-token limits apply to a project key.
+
+- **Create:** `/admin` → PROJECT KEYS → name → CREATE KEY (`sg16p_…`, shown once).
+- **RULES** (per project, `GET|POST|DELETE /api/admin/project-rules`, stored as
+  KV `policy:<project>`): instructions for the brain (up to 16,384
+  characters), requests per minute per key (1–10,000, default 60), maximum
+  wait for the brain (up to `MAX_QUEUE_WAIT_MS`), JSON-only answers
+  (`{"answer": "…"}`), and blocked patterns (regular expressions; matching
+  questions are refused with `403`, matching answers are not delivered). The
+  instructions are sent to the brain first, then any `system` text the
+  project sends with a call. All keys of a project share its rules. The name
+  `web` is reserved for the website itself.
+- **NEW KEY** (`POST /api/admin/project-keys {rotate: <key id>}`): a fresh key
+  for the same project; the old key stops at the same moment (BROKEN).
+- **ON / OFF / BROKEN:** as above.
+
+A project calls `POST /v1/ask` (`{"kind":"chat","text":"…","system":"…","history":[…]}`)
+or `POST /v1/chat/completions`, with `Authorization: Bearer <its key>`.
+
+## What is stored, and where
+
+Nothing is stored on the brain server: it only runs the model.
+
+| Store (Cloudflare) | What | Not stored |
+|---|---|---|
+| D1 `accounts` | visitor email, created / last sign-in, the account's pass | names, chat text, files |
+| D1 `login_codes` | one HMAC of the current sign-in code per email | the code itself |
+| D1 `checkouts`, `passes`, `webhook_events` | pass purchases (Dodo reference, status, pass token record) | card or bank details (Dodo holds them) |
+| D1 `requests` | per call: time, key id, project, kind, status, timings, script | the question or the answer |
+| D1 `history` | SHA-256 digests of question and answer | the question or the answer |
+| KV `KEYS` | SHA-256 of API keys, key records, project rules, key switches, the brain-server setting (credentials encrypted) | API keys themselves |
+| Durable Objects | the queue slot; per-key rate window, score and free-token count | any text |
+| Visitor's device | chat history, files, the pass token (browser storage) | — |
 
 ## Language handling
 

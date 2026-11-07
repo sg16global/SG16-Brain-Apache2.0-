@@ -16,6 +16,11 @@ visitor/project ──▶ Worker (this package)          [deterministic: keys, r
 
 ## The brain
 
+The brain server can be any machine running Ollama with this model: set it
+on `/admin` → BRAIN SERVER (saved in KV, wins over `MODEL_URL`, no redeploy)
+or with the `MODEL_URL` deploy setting. See `../docs/BRAIN-CORE-REBUILD.md`
+("Connect any brain server", "API projects", "What is stored, and where").
+
 `MODEL_NAME` = **`saiftechglobal/sg16-brain:Q4_K_M`**, exactly as published at
 https://ollama.com/saiftechglobal/sg16-brain:Q4_K_M (7.5 GB, 12.2B parameters,
 Q4_K_M, Ollama ID `f4b21a5d4668`). The brain server installs it with
@@ -40,7 +45,7 @@ schema.sql  D1 tables
 
 | Binding | Store | Purpose |
 |---|---|---|
-| `KEYS` | Workers KV | `sha256(api key) -> key record`; `policy:<project> -> project policy`; `projctl:<key id>` switches |
+| `KEYS` | Workers KV | `sha256(api key) -> key record`; `policy:<project>` project rules; `projctl:<key id>` switches; `brain:server` the brain-server setting (credentials encrypted) |
 | `LOGS` | D1 (`schema.sql`) | request logs + history digests (real events only), accounts, payments |
 | `QUEUE` | Durable Object `InferenceQueueDO` | the single inference slot: semaphore + FIFO + lease expiry; BRAIN POWER switch |
 | `MATRIX` | Durable Object `MatrixDO` | per-key living matrix: rate window, totals, integer score, free-token bucket |
@@ -74,13 +79,15 @@ Site routes (used by the pages in `site/`):
 | `GET/POST /api/identity` | visitor email-code sign-in, operator sign-in |
 | `GET /api/models`, `GET /api/health`, `GET /api/charter`, `GET /api/parity` | status pages |
 | `POST /api/session/forget`, `POST /api/ingest`, `POST /api/project-scan` | session reset, ingest, project scan |
-| `GET /api/admin/project-keys` (+ POST/DELETE), `GET /api/admin/project-activity`, `POST /api/admin/project-control`, `GET/POST /api/admin/brain-power` | admin console |
+| `GET /api/admin/project-keys` (+ POST/DELETE; POST `{rotate}` = new key, old one retired), `GET /api/admin/project-activity`, `POST /api/admin/project-control`, `GET/POST /api/admin/brain-power` | admin console |
+| `GET/POST/DELETE /api/admin/brain-server`, `POST /api/admin/brain-server/test` | admin: connect any brain server, no redeploy (`src/admin-gateway.ts`) |
+| `GET/POST/DELETE /api/admin/project-rules` | admin: each API project's own instructions and limits |
 | `GET/POST /api/billing`, `POST /api/dodo/checkout`, `POST /api/dodo/webhook`, `POST /api/dodo/confirm`, `POST /api/billing/confirm`, `POST /api/pass/verify`, `POST /api/pass-check` | passes (Dodo Payments) |
 
 ## Tests
 
 ```bash
-npm test               # 124 tests (node:test)
+npm test               # 134 tests (node:test)
 npx tsc --noEmit -p .  # type check
 ```
 

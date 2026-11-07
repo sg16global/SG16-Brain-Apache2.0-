@@ -13,6 +13,8 @@
 //   GET  /api/admin/project-keys  operator only: key config state + minted-key records
 //   POST /api/admin/project-keys  operator only: mint one sg16p_ project key (recorded)
 //   DELETE /api/admin/project-keys  operator only: revoke one key (?key=<sg16p_ key> or ?id=<fingerprint>)
+//   POST /api/admin/project-keys {rotate:<fingerprint>}  operator only: a new key for the same
+//        project; the old key is retired (BROKEN) the same moment
 //   GET  /api/admin/project-activity  operator only: per project key — live status, last call, 24h calls
 //   POST /api/admin/project-control   operator only: one key ON / OFF / BROKEN (broken is final)
 //   GET|POST /api/admin/brain-power   operator only: the BRAIN POWER switch (on = answering, off = stopped)
@@ -266,7 +268,7 @@ export async function adminLogin(
   return { ok: true, token: await signIdentityToken(normalizedEmail, env.SG16_IDENTITY_SECRET ?? ""), email: normalizedEmail };
 }
 
-async function operatorBearer(
+export async function operatorBearer(
   request: Request,
   env: DesignEnv,
 ): Promise<{ email: string } | null> {
@@ -731,10 +733,42 @@ export async function designCompatRoute(
     if (!secret || secret.length < 32) {
       return json({ error: "SG16_PROJECT_KEY_SECRET is not set on this server (32+ characters)." }, 503);
     }
-    const body = await request.json().catch(() => null) as { project?: unknown } | null;
+    const body = await request.json().catch(() => null) as { project?: unknown; rotate?: unknown } | null;
+    // rotate: a new key for the same project, the old one retired at once
+    if (body && body.rotate !== undefined) {
+      // by fingerprint (64 hex) or by the switch id from the activity list
+      // (sg16p_<project>_<last12>, which also covers keys minted before
+      // records existed)
+      const ref = typeof body.rotate === "string" ? body.rotate.trim() : "";
+      const records = await listProjectKeyRecords(env);
+      let project: string;
+      let switchId: string;
+      let record: ProjectKeyRecord | undefined;
+      if (/^[0-9a-f]{64}$/.test(ref)) {
+        record = records.find((r) => r.id === ref);
+        if (!record) return json({ error: "No project-key record with that id." }, 404);
+        project = record.project;
+        switchId = `${PROJECT_KEY_PREFIX}${record.project}_${record.last12}`;
+      } else if (PROJECT_RECORD_ID.test(ref)) {
+        switchId = ref;
+        record = records.find((r) => `${PROJECT_KEY_PREFIX}${r.project}_${r.last12}` === ref);
+        project = record ? record.project : ref.slice(PROJECT_KEY_PREFIX.length, -13);
+      } else {
+        return json({ error: "rotate must be a key fingerprint (64 hex) or its id from the list (sg16p_<project>_<last 12>)." }, 400);
+      }
+      if (record?.revoked || (await projectKeyControl(env.KEYS, switchId)) === "broken") {
+        return json({ error: "That key is already retired. Create a new key for the project instead." }, 409);
+      }
+      const fresh = await createProjectKey(project, secret);
+      // record the new key before it is shown, then retire the old one
+      await recordProjectKey(env, fresh, project, Date.now());
+      await setProjectControl(env, switchId, "broken", Date.now());
+      if (record) await revokeProjectKeyRecord(env, record.id);
+      return json({ project, key: fresh, shownOnce: true, replaced: record?.id ?? switchId });
+    }
     const project = typeof body?.project === "string" ? body.project.trim().toLowerCase() : "";
-    if (!isValidProjectName(project)) {
-      return json({ error: "Project name: 1-40 characters, lowercase letters, digits and dashes." }, 400);
+    if (!isValidProjectName(project) || project === "web") {
+      return json({ error: "Project name: 1-40 characters, lowercase letters, digits and dashes (\"web\" is the website itself)." }, 400);
     }
     const key = await createProjectKey(project, secret);
     // Record the fingerprint BEFORE the key is disclosed: if the put throws,
