@@ -13,8 +13,8 @@ Order matters: **check everything locally first, then GitHub, then Cloudflare.**
 
 | Setting | Where | Fresh value |
 |---|---|---|
-| Worker | `brain-core/wrangler.jsonc` `name` | `soverian-sg16-brain` (a Worker created in the dashboard and connected to GitHub must use exactly this name) |
-| Site address | `brain-core/wrangler.jsonc` `workers_dev: true` | the free `https://soverian-sg16-brain.<your-subdomain>.workers.dev` until a domain is added |
+| Worker | `brain-core/wrangler.jsonc` `name` | `sg16-brain-apache2-0` (a Worker created in the dashboard and connected to GitHub must use exactly this name) |
+| Site address | `brain-core/wrangler.jsonc` `workers_dev: true` | the free `https://sg16-brain-apache2-0.<your-subdomain>.workers.dev`; custom domains mistralbrain.com and www |
 | KV `KEYS`, D1 `LOGS` | `wrangler.jsonc` | created new by `scripts/fresh-setup.mjs` (no old ids in the file) |
 | Brain | `MODEL_NAME` var | `saiftechglobal/sg16-brain:Q4_K_M` — the published 7.5 GB build (ID `f4b21a5d4668`) |
 | Brain server | `/admin` → BRAIN SERVER (or the `MODEL_URL` var) | empty = brain shows "offline" until a server is connected; any server works, no redeploy needed to change it |
@@ -62,7 +62,7 @@ Cloudflare dashboard → Workers & Pages → Create → Import a repository:
 | Setting | Value |
 |---|---|
 | Repository / branch | `sg16global/SG16-Brain-Apache2.0-` / `main` |
-| Worker name | `soverian-sg16-brain` (must match `wrangler.jsonc`) |
+| Worker name | `sg16-brain-apache2-0` (must match `wrangler.jsonc`) |
 | Root directory | `brain-core` |
 | Build command | *(empty: `wrangler.jsonc` stages the site itself)* |
 | Deploy command | `npx wrangler deploy` |

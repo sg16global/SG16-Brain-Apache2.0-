@@ -1,8 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Separate Worker for the new system (2026-11-08). NOT "sg16-brain-core":
-  // that name is the live mistralbrain.com Worker and must never be deployed over.
-  "name": "soverian-sg16-brain",
+  // The Worker created in the dashboard and connected to GitHub (2026-11-08).
+  // Workers Builds only deploys when this name matches the dashboard's name.
+  "name": "sg16-brain-apache2-0",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -12,13 +12,15 @@
 
   "observability": { "enabled": true },
 
-  // FRESH DEPLOYMENT (2026-11-06): nothing here points at the old account.
-  // Until the new domain exists the Worker runs on its free workers.dev
-  // address. When the domain is added to the NEW Cloudflare account, add:
-  //   "routes": [{ "pattern": "your-domain.com/*", "zone_name": "your-domain.com" }],
-  // (see docs/FRESH-DEPLOY.md).
+  // The owner attached these custom domains in the dashboard (2026-11-08);
+  // listed here so every deploy keeps them exactly as they are.
+  "routes": [
+    { "pattern": "mistralbrain.com", "custom_domain": true },
+    { "pattern": "www.mistralbrain.com", "custom_domain": true }
+  ],
+  // workers.dev and preview addresses on, as set in the dashboard
   "workers_dev": true,
-  "preview_urls": false,
+  "preview_urls": true,
 
   // client/ is generated, not committed: every deploy (this PC or a Worker
   // connected to GitHub) first stages it from site/. Only site/ changes
