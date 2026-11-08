@@ -44,10 +44,12 @@
     { "binding": "LOGS", "database_name": "soverian-sg16-brain", "database_id": "eecde4ef-563a-4c38-8c50-e2c157d923df" }
   ],
 
-  // visitor sign-in codes (src/accounts.ts): Cloudflare Email Sending needs the
-  // new domain onboarded (Email -> Email Sending, Workers Paid for any address).
-  // When it is, uncomment this and set EMAIL_FROM below:
-  // "send_email": [{ "name": "EMAIL" }],
+  // visitor sign-in codes (src/accounts.ts) through Cloudflare Email Sending,
+  // enabled for mistralbrain.com on 2026-11-08 (DKIM, SPF and DMARC records
+  // published). The binding may only send as the one sign-in address.
+  "send_email": [
+    { "name": "EMAIL", "allowed_sender_addresses": ["signin@mistralbrain.com"] }
+  ],
 
   "durable_objects": {
     "bindings": [
@@ -76,7 +78,8 @@
     "MAX_QUEUE_WAIT_MS": "120000",
     "SELF_CHECK": "false",
     "FREE_TOKEN_ALLOWANCE": "10000",
-    // "EMAIL_FROM": "SG16 Brain <signin@your-domain.com>",
+    // the sender of sign-in codes; must match allowed_sender_addresses above
+    "EMAIL_FROM": "SG16 Brain <signin@mistralbrain.com>",
     "DODO_TEST_MODE": "false",
     // the same Dodo Payments products as before (owner decision 2026-11-06)
     "DODO_PRODUCT_IDS": "{\"day\":\"pdt_0NoUNgIwv3XfCVptVxLaa\",\"week\":\"pdt_0NoUNgD5Yjz1cRYOwIixQ\",\"half\":\"pdt_0NoUNg8AK64S8TkG2b5tK\",\"month\":\"pdt_0NoUNg3MglpZRU2yPvduq\"}"
