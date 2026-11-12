@@ -13,7 +13,8 @@ import {
   trialRecord,
   TRIAL_COOKIE,
 } from "../src/trial.ts";
-import { designCompatRoute, signAccountToken, type DesignEnv } from "../src/design-compat.ts";
+import { designCompatRoute, signAccountToken, signIdentityToken, type DesignEnv } from "../src/design-compat.ts";
+import { issueRecord } from "../src/billing.ts";
 
 const SECRET = "trial-test-identity-secret-0123456789";
 const DAY = 86_400_000;
@@ -151,13 +152,48 @@ test("POST /api/brain: after the trial, a pass is required (402 to the Subscript
   assert.equal(ended.seen.length, 0);
 });
 
-test("POST /api/brain: the trial never changes signed-in visitors or pass holders", async () => {
+test("POST /api/brain: signing in never ends the trial early (visitor account or the operator)", async () => {
+  const live = env({ FREE_TOKEN_ALLOWANCE: "0" }); // the live setting
+  const visitor = await signAccountToken("visitor@example.com", SECRET);
+  const first = await brain(live, { authorization: `Bearer ${visitor}` });
+  assert.equal(first.res.status, 200, "a signed-in visitor chats free during the trial");
+  assert.equal(first.seen[0].id, (await trialRecord("203.0.113.7")).id);
+  const setCookie = first.res.headers.get("set-cookie");
+  assert.ok(setCookie?.startsWith(`${TRIAL_COOKIE}=v1.`));
+  // a trial started before signing in keeps running after it
+  const day2 = cookieOf(await newTrialCookie(SECRET, Date.now() - 2 * DAY));
+  assert.equal((await brain(live, { cookie: day2, authorization: `Bearer ${visitor}` })).res.status, 200);
+  // the operator signed in to /admin on the same browser chats too
+  const operator = await signIdentityToken("sg16global@gmail.com", SECRET);
+  const op = await brain(live, { cookie: day2, authorization: `Bearer ${operator}` });
+  assert.equal(op.res.status, 200);
+  assert.match(op.seen[0].id, /^trial_/);
+});
+
+test("POST /api/brain: after the trial a signed-in visitor needs a pass when there are no free tokens", async () => {
+  const old = cookieOf(await newTrialCookie(SECRET, Date.now() - 3 * DAY - 1000));
+  const visitor = await signAccountToken("visitor@example.com", SECRET);
+  const ended = await brain(env({ FREE_TOKEN_ALLOWANCE: "0" }), { cookie: old, authorization: `Bearer ${visitor}` });
+  assert.equal(ended.res.status, 402);
+  assert.equal(ended.body.trialEnded, true);
+  assert.equal(ended.body.subscribeUrl, "/subscription");
+  assert.equal(ended.seen.length, 0, "the model is never called");
+  // with free tokens switched on (FREE_TOKEN_ALLOWANCE > 0) the account's own bucket takes over
+  const withTokens = await brain(env({ FREE_TOKEN_ALLOWANCE: "10000" }), { cookie: old, authorization: `Bearer ${visitor}` });
+  assert.equal(withTokens.res.status, 200);
+  assert.match(withTokens.seen[0].id, /^free_/);
+});
+
+test("POST /api/brain: a pass holder is never on the trial, before or after it", async () => {
+  const BILLING = "trial-test-billing-secret-0123456789";
+  const record = await issueRecord("day", null, BILLING);
+  const header = Buffer.from(JSON.stringify(record)).toString("base64url");
   const old = cookieOf(await newTrialCookie(SECRET, Date.now() - 30 * DAY));
-  const token = await signAccountToken("visitor@example.com", SECRET);
-  const signedIn = await brain(env(), { cookie: old, authorization: `Bearer ${token}` });
-  assert.equal(signedIn.res.status, 200, "an ended trial does not block a signed-in account");
-  assert.match(signedIn.seen[0].id, /^free_/, "the account's own free tokens, as before");
-  assert.equal(signedIn.res.headers.get("set-cookie"), null);
+  const paid = await brain(env({ BILLING_SECRET: BILLING, FREE_TOKEN_ALLOWANCE: "0" }), { cookie: old, "x-sg16-pass": header });
+  assert.equal(paid.res.status, 200);
+  assert.match(paid.seen[0].id, /^pass_/);
+  assert.equal(paid.body.tier, "work");
+  assert.equal(paid.res.headers.get("set-cookie"), null);
 });
 
 test("POST /api/brain: FREE_TRIAL_DAYS 0 keeps the old sign-in gate", async () => {

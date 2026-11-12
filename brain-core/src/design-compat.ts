@@ -56,6 +56,7 @@ import { keyHash } from "./keys.ts";
 import { SG16_BRAIN_MODEL } from "./client-routes.ts";
 import { freeTokenAllowance } from "./tokens.ts";
 import { visitorTrial, trialRecord, trialDays } from "./trial.ts";
+import { checkHuman, turnstileEnabled, turnstileSiteKey } from "./turnstile.ts";
 
 export interface DesignEnv {
   KEYS: KVNamespace;
@@ -72,6 +73,9 @@ export interface DesignEnv {
   FREE_TOKEN_ALLOWANCE?: string;
   /** Free chat trial without sign-in, in days (default 3, max 7, "0" = off): see trial.ts. */
   FREE_TRIAL_DAYS?: string;
+  /** Cloudflare Turnstile for free-trial chat; off unless both are set (see turnstile.ts). */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
   SG16_REVOKED_PROJECTS?: string;
   BILLING_SECRET?: string;
   MODEL_NAME?: string;
@@ -662,7 +666,8 @@ export async function designCompatRoute(
       if (!result.ok) return json({ ok: false, error: result.error }, result.status);
       const token = await signAccountToken(result.email, env.SG16_IDENTITY_SECRET ?? "");
       const pass = await linkPass(env, result.email, body.pass);
-      const freeLeft = pass || !deps.freeTokens
+      // no free tokens exist when FREE_TOKEN_ALLOWANCE is "0": none are reported
+      const freeLeft = pass || !deps.freeTokens || freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) === 0
         ? null
         : await deps.freeTokens(await accountFreeRecord(result.email)).catch(() => null);
       return json({
@@ -675,7 +680,7 @@ export async function designCompatRoute(
       const who = await signedInAs(request, env);
       if (!who) return json({ ok: false, error: "invalid token" }, 401);
       const pass = await linkPass(env, who.email, body.pass);
-      const freeLeft = pass || !deps.freeTokens
+      const freeLeft = pass || !deps.freeTokens || freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) === 0
         ? null
         : await deps.freeTokens(await accountFreeRecord(who.email)).catch(() => null);
       return json({
@@ -838,7 +843,7 @@ export async function designCompatRoute(
   // ---- /api/brain: the design's chat panel ------------------------------
   if (path === "/api/brain" && request.method === "GET") {
     const probe = new URL(request.url).searchParams.get("probe");
-    if (probe === "turnstile") return json({ enabled: false, siteKey: null });
+    if (probe === "turnstile") return json({ enabled: turnstileEnabled(env), siteKey: turnstileSiteKey(env) });
     if (probe === "health") {
       const health = await deps.healthProbe();
       if (health.power === false) return json({ ok: false, brain: "off" }, 503);
@@ -867,10 +872,12 @@ export async function designCompatRoute(
     //  2. a website visitor with a device pass (verified server-side);
     //  3. a signed-in visitor (account token): a pass held on this device is
     //     kept with the account, and a pass the account holds works here too;
-    //     without a pass, the account's own one-time free tokens are used.
-    // Not signed in and no pass: the free trial (trial.ts) - chat with no
-    // sign-in for FREE_TRIAL_DAYS days, then a pass is required. With the
-    // trial switched off: asked to sign in (free), as before.
+    //     without a pass, the free trial below, then the account's own
+    //     one-time free tokens (when FREE_TOKEN_ALLOWANCE gives any).
+    // No pass, signed in or not: the free trial (trial.ts) - chat for
+    // FREE_TRIAL_DAYS days, then a pass is required. Signing in never ends the
+    // trial early. With the trial switched off: a visitor who is not signed in
+    // is asked to sign in (free), as before.
     const keyed = await deps.keyAuth(request.headers.get("authorization"));
     if (!keyed && /^Bearer\s+sg16p?_/i.test(request.headers.get("authorization") ?? "")) {
       return json(
@@ -885,13 +892,16 @@ export async function designCompatRoute(
       if (pass) await rememberPass(env, who.email, pass.pass, stored).catch(() => undefined);
       else if (stored) pass = await resolvePass(stored, env);
     }
-    const trial = !keyed && !pass && !who
+    const trial = !keyed && !pass
       ? await visitorTrial(request.headers.get("cookie"), env.SG16_IDENTITY_SECRET, env.FREE_TRIAL_DAYS)
       : null;
-    if (trial?.state === "off") {
+    const accountFreeTokens = freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) > 0;
+    if (trial?.state === "off" && !who) {
       return json(
         {
-          error: `Sign in free to chat: new accounts get ${freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE).toLocaleString("en-US")} free tokens. Press My Domain (or Sign In in the menu).`,
+          error: accountFreeTokens
+            ? `Sign in free to chat: new accounts get ${freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE).toLocaleString("en-US")} free tokens. Press My Domain (or Sign In in the menu).`
+            : "Get a pass on the Subscription page to chat.",
           signInRequired: true,
           signInUrl: "/login",
           tier: "free",
@@ -900,7 +910,9 @@ export async function designCompatRoute(
         { "X-Chat-Tier": "free" },
       );
     }
-    if (trial?.state === "ended") {
+    // after the trial a signed-in visitor still has the account's free tokens,
+    // when FREE_TOKEN_ALLOWANCE gives any; otherwise a pass is required
+    if (trial?.state === "ended" && (!who || !accountFreeTokens)) {
       // shown as-is in the chat panel's existing error line
       return json(
         {
@@ -916,9 +928,23 @@ export async function designCompatRoute(
     }
     const record = keyed
       ?? (pass ? await passKeyRecord(pass.pass, pass.activatedAt)
-        : who ? await accountFreeRecord(who.email)
-        : await trialRecord(request.headers.get("cf-connecting-ip") ?? "unverified-network"));
+        : trial?.state === "active" ? await trialRecord(request.headers.get("cf-connecting-ip") ?? "unverified-network")
+        : await accountFreeRecord(who!.email));
     const tier = keyed || pass ? "work" : "free";
+    // free-trial chat: Cloudflare Turnstile, when the owner has switched it on
+    // (turnstile.ts); the trial clock does not start until the check passes
+    let humanToken: string | undefined;
+    if (trial?.state === "active") {
+      const human = await checkHuman({ turnstileToken: body.turnstileToken, humanToken: body.humanToken }, env);
+      if (!human.ok) {
+        return json(
+          { error: "Please complete the quick check below, then send your message again.", turnstileRequired: true, tier },
+          403,
+          { "X-Chat-Tier": tier },
+        );
+      }
+      humanToken = human.humanToken;
+    }
     const tierHeaders: Record<string, string> = { "X-Chat-Tier": tier };
     if (trial?.state === "active") {
       tierHeaders["X-Free-Trial-Ends"] = new Date(trial.endsAt).toISOString();
@@ -956,6 +982,8 @@ export async function designCompatRoute(
         brain: typeof meta.engine === "string" ? meta.engine : "sg16",
         tier,
         ...(freeLeft !== null ? { freeTokensRemaining: freeLeft } : {}),
+        // the panel keeps it in memory and sends it back, so the check is not repeated
+        ...(humanToken ? { humanToken } : {}),
       };
       if (body.stream === true) {
         const ndjson =
@@ -972,7 +1000,9 @@ export async function designCompatRoute(
       // "FREE · GET A PASS" chip (which links to /subscription)
       return json(
         {
-          error: "Your free SG16 Brain tokens are used up. Get a pass on the Subscription page to keep chatting.",
+          error: freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) > 0
+            ? "Your free SG16 Brain tokens are used up. Get a pass on the Subscription page to keep chatting."
+            : "Get a pass on the Subscription page to chat.",
           freeTokensExhausted: true,
           freeTokensRemaining: 0,
           subscribeUrl: "/subscription",

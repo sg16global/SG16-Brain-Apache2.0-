@@ -25,6 +25,7 @@ interface Waiting {
   id: number;
   deadline: number;
   seen: number;            // last enqueue/poll time
+  priority: boolean;       // a pass holder or an API project (owner request 2026-11-13)
 }
 
 export class InferenceGate {
@@ -42,8 +43,11 @@ export class InferenceGate {
   }
 
   /** Try to take the single inference slot. Returns the ticket, or the queue
-   * position and the wait budget for this request. */
-  acquire(waitBudgetMs?: number): { granted: true; ticket: number } | { granted: false; ticket: number; position: number; deadline: number } {
+   * position and the wait budget for this request. A priority request (a pass
+   * holder or an API project) waits ahead of every free-trial / free-token
+   * request, first come first served within each group, so free traffic can
+   * never crowd out paying users. */
+  acquire(waitBudgetMs?: number, priority = false): { granted: true; ticket: number } | { granted: false; ticket: number; position: number; deadline: number } {
     const now = this.now();
     if (this.busy && now - this.leaseAt > this.config.leaseMs) {
       this.busy = false; // lease expired: reclaim the abandoned slot
@@ -60,8 +64,12 @@ export class InferenceGate {
       return { granted: true, ticket };
     }
     const deadline = now + (waitBudgetMs ?? this.config.waitBudgetMs);
-    this.queue.push({ id: ticket, deadline, seen: now });
-    const position = this.queue.length;
+    const entry: Waiting = { id: ticket, deadline, seen: now, priority };
+    // priority: after the last priority waiter, ahead of every other one
+    const at = priority ? this.queue.findIndex((w) => !w.priority) : -1;
+    if (at === -1) this.queue.push(entry);
+    else this.queue.splice(at, 0, entry);
+    const position = this.queue.indexOf(entry) + 1;
     return { granted: false, ticket, position, deadline };
   }
 

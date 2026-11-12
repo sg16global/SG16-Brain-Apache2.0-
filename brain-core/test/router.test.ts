@@ -47,7 +47,7 @@ function queueNamespace(gate: InferenceGate) {
           return json({ on: power.on });
         }
         if (path === "/acquire" && !power.on) return json({ granted: false, off: true });
-        if (path === "/acquire") return json(gate.acquire(body.waitBudgetMs));
+        if (path === "/acquire") return json(gate.acquire(body.waitBudgetMs, body.priority === true));
         if (path === "/poll") return json(gate.poll(body.ticket));
         if (path === "/release") return json({ released: gate.release(body.ticket) });
         if (path === "/abandon") { gate.abandon(body.ticket); return json({ abandoned: true }); }
@@ -595,8 +595,10 @@ async function freeChat(env: Env, message: string, email = "visitor@example.com"
   );
 }
 
+// The account free-token ledger: it runs when the free trial is off (FREE_TRIAL_DAYS "0")
+// or, for a signed-in visitor, after the trial ends - so these run with the trial off.
 test("free tier: each answer is charged the model's real token counts; the balance rides back to the panel", async () => {
-  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "1000" });
+  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "1000", FREE_TRIAL_DAYS: "0" });
   modelHandler = async () => json({ message: { content: "hello" }, prompt_eval_count: 300, eval_count: 50 });
   const res = await freeChat(env, "hi");
   assert.equal(res.status, 200);
@@ -608,7 +610,7 @@ test("free tier: each answer is charged the model's real token counts; the balan
 });
 
 test("free tier: once the allowance is spent, 402 with a subscribe message and the model is never called", async () => {
-  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "500" });
+  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "500", FREE_TRIAL_DAYS: "0" });
   let calls = 0;
   modelHandler = async () => { calls += 1; return json({ message: { content: "long answer" }, prompt_eval_count: 400, eval_count: 200 }); };
   const first = await freeChat(env, "hi");
@@ -624,7 +626,7 @@ test("free tier: once the allowance is spent, 402 with a subscribe message and t
 });
 
 test("free tier: allowances are per account; one account cannot spend another's", async () => {
-  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "100" });
+  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "100", FREE_TRIAL_DAYS: "0" });
   modelHandler = async () => json({ message: { content: "ok" }, prompt_eval_count: 90, eval_count: 20 });
   assert.equal((await freeChat(env, "hi", "one@example.com")).status, 200);
   assert.equal((await freeChat(env, "hi", "one@example.com")).status, 402);
@@ -671,7 +673,7 @@ test("free trial (default 3 days): a visitor chats with no sign-in, under SG16's
 });
 
 test("free tier: a failed answer is not charged", async () => {
-  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "100" });
+  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "100", FREE_TRIAL_DAYS: "0" });
   modelHandler = async () => { throw new Error("tunnel down"); };
   assert.equal((await freeChat(env, "hi")).status, 503);
   modelHandler = async () => json({ message: { content: "ok" }, prompt_eval_count: 60, eval_count: 10 });
@@ -691,7 +693,7 @@ test("free tier never meters API project keys", async () => {
 });
 
 test("free tier: parallel requests queued behind the last free answer cannot overspend", async () => {
-  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "100" });
+  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "100", FREE_TRIAL_DAYS: "0" });
   let calls = 0;
   modelHandler = async () => {
     calls += 1;
@@ -707,7 +709,7 @@ test("free tier: parallel requests queued behind the last free answer cannot ove
 // ---- the operator's switches ---------------------------------------------------
 
 test("BRAIN POWER off: every chat stops at once, nothing reaches the model, nothing is charged", async () => {
-  const { env, key, power } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "1000" });
+  const { env, key, power } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "1000", FREE_TRIAL_DAYS: "0" });
   let calls = 0;
   modelHandler = async () => { calls += 1; return json({ message: { content: "hello" }, prompt_eval_count: 300, eval_count: 50 }); };
   power.on = false;

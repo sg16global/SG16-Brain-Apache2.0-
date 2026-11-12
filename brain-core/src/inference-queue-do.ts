@@ -44,8 +44,8 @@ export class InferenceQueueDO {
     if (request.method === "POST" && path === "/acquire") {
       // brain switched off by the operator: nobody gets a slot
       if (!this.power) return json({ granted: false, off: true });
-      const { waitBudgetMs } = await request.json().catch(() => ({ waitBudgetMs: undefined })) as { waitBudgetMs?: number };
-      return json(this.gate.acquire(waitBudgetMs));
+      const { waitBudgetMs, priority } = await request.json().catch(() => ({ waitBudgetMs: undefined })) as { waitBudgetMs?: number; priority?: unknown };
+      return json(this.gate.acquire(waitBudgetMs, priority === true));
     }
     if (request.method === "POST" && path === "/poll") {
       const { ticket } = await request.json().catch(() => ({ ticket: 0 })) as { ticket: number };

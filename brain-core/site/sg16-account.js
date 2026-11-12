@@ -2,7 +2,8 @@
 //
 // The login page (/login) was operator-only. This adds the visitor's own
 // sign-in above it: email -> 6-digit code by email -> signed in. The first
-// code for an email creates the free account (10,000 free tokens). A signed-in
+// code for an email creates the free account (free tokens only when the server
+// gives any: FREE_TOKEN_ALLOWANCE, "0" since 2026-11-13). A signed-in
 // visitor sees their account here: free tokens left, or their pass. A pass
 // held on this device is kept with the account, and a pass the account holds
 // is copied to this device, so it works everywhere they sign in.
@@ -136,7 +137,7 @@
       }
       html =
         "<h2>MY DOMAIN</h2>" +
-        '<p class="sa-sub">You are signed in on this device. Your free tokens and your pass go with your account to every device you sign in on.</p>' +
+        '<p class="sa-sub">You are signed in on this device. Your pass goes with your account to every device you sign in on.</p>' +
         msg + rows +
         '<div class="sa-actions"><a class="btn-red px-5 py-2.5 text-[11px]" href="/chat">START CHAT</a>' +
         (me && !me.pass ? '<a class="btn-ghost px-5 py-2.5 text-[11px]" href="/subscription">GET A PASS</a>' : "") + "</div>";
@@ -154,7 +155,7 @@
     } else {
       html =
         "<h2>SIGN IN OR SIGN UP</h2>" +
-        '<p class="sa-sub">Enter your email and we send you a 6-digit code. No password. New here? The same code creates your free account with <b>10,000 free tokens</b>.</p>' +
+        '<p class="sa-sub">Enter your email and we send you a 6-digit code. No password. New here? The same code creates your free account.</p>' +
         msg +
         '<form data-sa="request"><label><span>YOUR EMAIL</span>' +
         '<input class="input-dark h-11 w-full px-3 text-[14px]" type="email" name="email" autocomplete="email" required value="' + esc(state.email) + '"></label>' +
@@ -208,8 +209,8 @@
       }
       keepPass(d.pass);
       state.step = "email"; state.me = null;
-      var gift = typeof d.freeTokensRemaining === "number" ? d.freeTokensRemaining.toLocaleString() + " free tokens" : "your free tokens";
-      state.msg = d.created ? "Welcome! Your free account is ready, with " + gift + "." : "Welcome back! You are signed in.";
+      var gift = typeof d.freeTokensRemaining === "number" && d.freeTokensRemaining > 0 ? ", with " + d.freeTokensRemaining.toLocaleString() + " free tokens" : "";
+      state.msg = d.created ? "Welcome! Your free account is ready" + gift + "." : "Welcome back! You are signed in.";
       state.err = false;
       announce();
       loadMe();
@@ -282,7 +283,7 @@
     if (h1 && h1.textContent === "OPERATOR SIGN-IN") {
       h1.textContent = "MY DOMAIN";
       var p = h1.nextElementSibling;
-      if (p) p.textContent = "Sign in or create your free account with your email. New accounts get 10,000 free tokens.";
+      if (p) p.textContent = "Sign in or create your free account with your email.";
     }
     var notes = col.querySelectorAll("form p");
     for (var i = 0; i < notes.length; i++) {

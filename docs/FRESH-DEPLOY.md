@@ -97,7 +97,8 @@ except the passwords and the Dodo values):
 npx wrangler secret put SG16_IDENTITY_SECRET      # signs sign-in tokens
 npx wrangler secret put SG16_ADMIN_PASSWORD       # the admin password for sg16global@gmail.com
 npx wrangler secret put SG16_PROJECT_KEY_SECRET   # signs API project keys
-npx wrangler secret put BILLING_SECRET            # signs passes
+npx wrangler secret put BILLING_SECRET            # signs passes (required: no pass works without it)
+npx wrangler secret put TURNSTILE_SECRET_KEY      # optional: free-trial bot check, with TURNSTILE_SITE_KEY in wrangler.jsonc
 npx wrangler secret put DODO_API_KEY              # Dodo Payments API key
 npx wrangler secret put DODO_WEBHOOK_SECRET       # from the new Dodo webhook (step 5)
 npx wrangler secret put MODEL_SHARED_SECRET       # only if the brain server checks a bearer token

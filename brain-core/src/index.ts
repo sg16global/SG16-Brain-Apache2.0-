@@ -53,6 +53,8 @@ export interface Env {
   SELF_CHECK?: string;           // "true" = second model pass per answer (2x slower); default off
   FREE_TOKEN_ALLOWANCE?: string; // one-time free model tokens per free-tier visitor; then a pass is required
   FREE_TRIAL_DAYS?: string;      // chat with no sign-in for this many days (default 3, max 7, "0" = off); then a pass
+  TURNSTILE_SITE_KEY?: string;   // Cloudflare Turnstile for free-trial chat (turnstile.ts); off unless both are set
+  TURNSTILE_SECRET_KEY?: string; // secret: wrangler secret put TURNSTILE_SECRET_KEY
 
   // billing (Dodo Payments MoR pipeline — see billing-routes.ts)
   DODO_TEST_MODE?: string;
@@ -298,7 +300,8 @@ async function askParsed(
   }
 
   const queueStarted = Date.now();
-  const grant = await acquireSlot(env, maxQueueMs);
+  // pass holders and API projects wait ahead of free-trial and free-token chats
+  const grant = await acquireSlot(env, maxQueueMs, !free && !record.id.startsWith("trial_"));
   if (!grant.granted && grant.off) {
     // the operator switched the brain off (admin BRAIN POWER): nothing is charged
     return await finish(env, ctx, record, "chat", "none", 503, started, 0, false, "E_BRAIN_OFF",
@@ -456,8 +459,8 @@ async function queueDo(env: Env, path: string, body?: unknown): Promise<Record<s
   return (await response.json()) as Record<string, unknown>;
 }
 
-async function acquireSlot(env: Env, maxQueueMs: number): Promise<SlotResult> {
-  const first = await queueDo(env, "/acquire", { waitBudgetMs: maxQueueMs });
+async function acquireSlot(env: Env, maxQueueMs: number, priority = false): Promise<SlotResult> {
+  const first = await queueDo(env, "/acquire", { waitBudgetMs: maxQueueMs, priority });
   if (first.off === true) return { granted: false, ticket: 0, off: true };
   if (first.granted) return { granted: true, ticket: first.ticket as number };
   const ticket = first.ticket as number;

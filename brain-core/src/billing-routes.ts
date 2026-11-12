@@ -171,6 +171,9 @@ function billingInfo(env: BillingEnv, cors: string | null): Response {
 
 async function dodoCheckout(request: Request, env: BillingEnv, cors: string | null): Promise<Response> {
   const secret = env.BILLING_SECRET ?? "";
+  // no pass can be signed without the billing secret: never take a payment
+  // for a pass that could not be issued
+  if (!secret.trim()) return legacyError(503, "passes are unavailable: billing is not configured on this host", cors);
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return legacyError(400, "body must be a json object", cors);
   const payload = body as Record<string, unknown>;
@@ -307,6 +310,10 @@ async function dodoWebhook(request: Request, env: BillingEnv): Promise<Response>
   if (!secret) {
     return legacyError(503, "dodo webhook secret is not configured on this host", null);
   }
+  // 503, not 400: Dodo retries, so a paid pass is issued once the secret is set
+  if (!(env.BILLING_SECRET ?? "").trim()) {
+    return legacyError(503, "billing secret is not configured on this host", null);
+  }
   const rawBody = await request.text();
   try {
     await verifyWebhookSignature(
@@ -399,12 +406,22 @@ let checkout: CheckoutRow | null = null;
     return legacyJson({ received: true, event: eventType, acted: false, duplicate: true }, 200, null);
   }
 
-  await env.LOGS.batch([
-    env.LOGS.prepare("INSERT INTO passes (token, record, created_at) VALUES (?, ?, ?)")
-      .bind(record.token, JSON.stringify(record), Math.floor(Date.now() / 1000)),
-    env.LOGS.prepare("UPDATE checkouts SET status = 'paid', record_token = ? WHERE ref = ?")
+  // One atomic claim: two success events for the same payment can arrive at
+  // once (Dodo sends payment.succeeded and checkout.session.completed). Only
+  // the event whose UPDATE claims the checkout stores its pass; the other's
+  // INSERT finds a different record_token and stores nothing, so no second,
+  // orphaned valid pass is ever written.
+  const claimed = await env.LOGS.batch([
+    env.LOGS.prepare("UPDATE checkouts SET status = 'paid', record_token = ? WHERE ref = ? AND (status != 'paid' OR record_token IS NULL)")
       .bind(record.token, checkout.ref),
+    env.LOGS.prepare(
+      "INSERT INTO passes (token, record, created_at) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM checkouts WHERE ref = ? AND record_token = ?)",
+    )
+      .bind(record.token, JSON.stringify(record), Math.floor(Date.now() / 1000), checkout.ref, record.token),
   ]);
+  if (!claimed[0]?.meta?.changes) {
+    return legacyJson({ received: true, event: eventType, acted: false, duplicate: true }, 200, null);
+  }
 
   return legacyJson(
     { received: true, event: eventType, acted: true, pass: record.pass, deduped: !seen.meta.changes },

@@ -118,6 +118,9 @@ async function recordToken(
   expiresEpoch: number,
   nonce: string,
 ): Promise<string> {
+  // fail closed: with an empty secret anyone could sign a pass, so none is
+  // issued and none is accepted until BILLING_SECRET is set
+  if (!secret.trim()) throw new VerificationError("no billing secret is configured on this host");
   const message = `sg16-pass-v1|${passId}|${region ?? ""}|${price}|${expiresEpoch}|${nonce}`;
   return hmacHex(secret, message);
 }

@@ -32,13 +32,40 @@ export interface ZipEntry {
   data: Buffer;
 }
 
-/** Deflate a zip member; lazily so a runtime without node:zlib degrades gracefully. */
-async function inflateRaw(slice: Uint8Array): Promise<Buffer | null> {
+/**
+ * Inflate a zip member, never past `limit` bytes (owner request 2026-11-13):
+ * a zip's declared sizes can lie, and a small "zip bomb" member could
+ * otherwise expand to gigabytes in memory. Streams through
+ * DecompressionStream and stops as soon as the output passes the limit; a
+ * runtime without it falls back to node:zlib with maxOutputLength. null =
+ * unreadable or too large (the member is skipped).
+ */
+export async function inflateRaw(slice: Uint8Array, limit = MAX_FILE_BYTES): Promise<Buffer | null> {
+  if (typeof DecompressionStream === "function") {
+    try {
+      const reader = new Blob([new Uint8Array(slice)]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > limit) {
+          await reader.cancel().catch(() => undefined);
+          return null;
+        }
+        chunks.push(value);
+      }
+      return Buffer.concat(chunks);
+    } catch {
+      return null;
+    }
+  }
   try {
     const zlib = await import("node:zlib");
-    return zlib.inflateRawSync(slice);
+    return zlib.inflateRawSync(slice, { maxOutputLength: limit });
   } catch {
-    return null;
+    return null; // corrupt, or larger than the limit
   }
 }
 
@@ -58,6 +85,7 @@ export async function unzip(buf: Buffer, capBytes = MAX_TOTAL_BYTES): Promise<Zi
   let cd = buf.readUInt32LE(eocd + 16);
   const entries: ZipEntry[] = [];
   let total = 0;
+  let unpacked = 0;
 
   for (let k = 0; k < cdCount && cd < buf.length - 46; k++) {
     if (buf.readUInt32LE(cd) !== 0x02014b50) break;
@@ -83,10 +111,16 @@ export async function unzip(buf: Buffer, capBytes = MAX_TOTAL_BYTES): Promise<Zi
     const start = localOff + 30 + ln + lx;
     const slice = buf.subarray(start, start + compSize);
 
+    // declared sizes can lie: the per-file limit and the archive budget are
+    // also enforced on the bytes really unpacked
     let data: Buffer | null = null;
-    if (method === 0) data = Buffer.from(slice);
-    else if (method === 8) data = await inflateRaw(slice);
-    if (data) entries.push({ path: name.replace(/\\/g, "/"), data });
+    if (method === 0) data = slice.length <= MAX_FILE_BYTES ? Buffer.from(slice) : null;
+    else if (method === 8) data = await inflateRaw(slice, MAX_FILE_BYTES);
+    if (data) {
+      unpacked += data.length;
+      if (unpacked > capBytes) throw new Error("Archive exceeds the 16 MB scan budget");
+      entries.push({ path: name.replace(/\\/g, "/"), data });
+    }
   }
   return entries;
 }
