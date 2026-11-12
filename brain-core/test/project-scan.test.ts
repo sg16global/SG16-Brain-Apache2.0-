@@ -5,8 +5,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { deflateRawSync } from "node:zlib";
 import {
   unzip,
+  inflateRaw,
   buildReport,
   projectScanRoute,
 } from "../src/project-scan.ts";
@@ -138,6 +140,32 @@ test("unzip reads stored archives and rejects non-zip bytes", async () => {
   assert.equal(entries[0].data.toString("utf8"), "console.log('hi');\n");
 
   await assert.rejects(() => unzip(Buffer.from("definitely not a zip")), /Not a ZIP archive/);
+});
+
+/** A one-member deflate zip whose central directory claims `declared` bytes unpacked. */
+function deflateZip(name: string, content: Buffer, declared: number): Buffer {
+  const zip = storedZip([{ name, data: deflateRawSync(content) }]);
+  const cd = zip.readUInt32LE(zip.length - 22 + 16);
+  zip.writeUInt16LE(8, cd + 10);        // method 8 = deflate
+  zip.writeUInt32LE(declared, cd + 24); // the (possibly lying) unpacked size
+  return zip;
+}
+
+test("unzip reads deflate members", async () => {
+  const text = Buffer.from("export const x = 1;\n".repeat(50), "utf8");
+  const entries = await unzip(deflateZip("src/x.ts", text, text.length));
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].data.toString("utf8"), text.toString("utf8"));
+});
+
+test("zip bomb: a member that lies about its size is stopped at the per-file limit, never fully unpacked", async () => {
+  const bomb = Buffer.alloc(64 * 1024 * 1024); // 64 MB of zeros deflates to ~64 KB
+  const zip = deflateZip("bomb.txt", bomb, 10); // claims 10 bytes
+  assert.ok(zip.length < 200 * 1024, "the archive itself is small");
+  const entries = await unzip(zip);
+  assert.equal(entries.length, 0, "the oversized member is skipped");
+  assert.equal(await inflateRaw(deflateRawSync(bomb), 512 * 1024), null);
+  assert.equal((await inflateRaw(deflateRawSync(Buffer.from("ok")), 10))?.toString(), "ok");
 });
 
 // ------------------------------------------------------------------ report
