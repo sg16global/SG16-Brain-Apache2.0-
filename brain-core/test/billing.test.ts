@@ -18,6 +18,8 @@ import {
   checkoutRequestBody,
   VerificationError,
 } from "../src/billing.ts";
+import { billingRoute } from "../src/billing-routes.ts";
+import { resolvePass } from "../src/client-routes.ts";
 
 const SECRET = "test-billing-secret-0123456789";
 
@@ -164,4 +166,41 @@ test("checkout body: one product, quantity 1, sg16 metadata", () => {
   assert.deepEqual(body.metadata, { sg16_pass: "day", sg16_region: "", sg16_checkout_ref: "abc123" });
   assert.throws(() => checkoutRequestBody(undefined, "day", null, null), VerificationError);
   assert.throws(() => checkoutRequestBody("pdt_x", "year", null, null), VerificationError);
+});
+
+// ---- fail closed without BILLING_SECRET (owner request 2026-11-13) --------------
+
+test("no billing secret: no pass is issued and a pass signed with an empty key is never accepted", async () => {
+  await assert.rejects(issueRecord("month", null, ""), VerificationError);
+  await assert.rejects(issueRecord("month", null, "   "), VerificationError);
+  // a forger's month pass, signed with the empty key an unset secret would mean
+  const now = Math.floor(Date.now() / 1000);
+  const nonce = "forged-nonce";
+  const expires = now + 30 * 24 * 3600;
+  const token = createHmac("sha256", "").update(`sg16-pass-v1|month||15|${expires}|${nonce}`).digest("hex");
+  const forged = {
+    pass: "month", label: "1-Month Premium", provider: "dodo", region: null, list_price: 15, price_charged: 15,
+    humanitarian_bypass: false, activated_at: now, expires_at: expires, nonce, token, verified_by: "sg16-host",
+  };
+  await assert.rejects(verifyRecord(forged, ""), VerificationError);
+  const header = Buffer.from(JSON.stringify(forged)).toString("base64url");
+  const env = { LOGS: {} as never, KEYS: {} as never, QUEUE: {} as never, MATRIX: {} as never };
+  assert.equal(await resolvePass(header, env), null, "the chat never accepts it");
+  assert.equal(await resolvePass(header, { ...env, BILLING_SECRET: "" }), null);
+});
+
+test("no billing secret: checkout and the payment webhook answer 503, so nobody pays for a pass that cannot be issued", async () => {
+  const env = { LOGS: {} as never, DODO_API_KEY: "key", DODO_WEBHOOK_SECRET: "whsec_" + Buffer.from("k").toString("base64") };
+  const checkout = await billingRoute(
+    new Request("https://mistralbrain.com/api/billing", { method: "POST", body: JSON.stringify({ pass: "day" }) }),
+    env,
+    "/api/billing",
+  );
+  assert.equal(checkout!.status, 503);
+  const webhook = await billingRoute(
+    new Request("https://mistralbrain.com/api/dodo/webhook", { method: "POST", body: "{}" }),
+    env,
+    "/api/dodo/webhook",
+  );
+  assert.equal(webhook!.status, 503, "Dodo retries a 503 once the secret is set");
 });

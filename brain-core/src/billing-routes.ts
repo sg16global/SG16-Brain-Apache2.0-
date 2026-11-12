@@ -171,6 +171,9 @@ function billingInfo(env: BillingEnv, cors: string | null): Response {
 
 async function dodoCheckout(request: Request, env: BillingEnv, cors: string | null): Promise<Response> {
   const secret = env.BILLING_SECRET ?? "";
+  // no pass can be signed without the billing secret: never take a payment
+  // for a pass that could not be issued
+  if (!secret.trim()) return legacyError(503, "passes are unavailable: billing is not configured on this host", cors);
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return legacyError(400, "body must be a json object", cors);
   const payload = body as Record<string, unknown>;
@@ -306,6 +309,10 @@ async function dodoWebhook(request: Request, env: BillingEnv): Promise<Response>
   const secret = env.DODO_WEBHOOK_SECRET ?? "";
   if (!secret) {
     return legacyError(503, "dodo webhook secret is not configured on this host", null);
+  }
+  // 503, not 400: Dodo retries, so a paid pass is issued once the secret is set
+  if (!(env.BILLING_SECRET ?? "").trim()) {
+    return legacyError(503, "billing secret is not configured on this host", null);
   }
   const rawBody = await request.text();
   try {
