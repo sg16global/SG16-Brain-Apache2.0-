@@ -312,7 +312,8 @@ test("an email code for sg16global@gmail.com gives a visitor account, never the 
 // ---- the account at work: free tokens and the pass ------------------------------
 
 test("free chat needs an account; each account has its own bucket on every device", async () => {
-  const { e, mail } = env();
+  // with the free trial switched off (trial.test.ts covers the trial)
+  const { e, mail } = env({ FREE_TRIAL_DAYS: "0" });
   const records: Array<{ id: string }> = [];
   const anon = await chat(e, records);
   assert.equal(anon.status, 401);

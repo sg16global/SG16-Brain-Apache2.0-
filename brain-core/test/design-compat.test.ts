@@ -383,7 +383,8 @@ test("POST /api/brain: a project body's Bearer key is its own work-tier bucket, 
 });
 
 test("POST /api/brain: pass-gated ChatReply, ndjson stream, honest refusals", async () => {
-  const e = env({ LOGS: { prepare: () => ({ bind: () => ({ first: async () => null }) }) } as never });
+  // the free trial switched off (FREE_TRIAL_DAYS "0"): the sign-in gate as before (trial.test.ts covers the trial)
+  const e = env({ LOGS: { prepare: () => ({ bind: () => ({ first: async () => null }) }) } as never, FREE_TRIAL_DAYS: "0" });
 
   // no pass and not signed in -> asked to sign in (free); the model is never called
   let doorCalls = 0;

@@ -36,8 +36,9 @@
 // issued by the old host still verify.
 //
 // Visitor accounts (src/accounts.ts): email + 6-digit code, one step for
-// sign-up and sign-in. Free website chat needs an account: each account has
-// its own one-time free token allowance, and its pass works on every device.
+// sign-up and sign-in. Each account has its own one-time free token
+// allowance, and its pass works on every device. Visitors who are not signed
+// in chat on the free trial (src/trial.ts) until it ends; then a pass.
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { KeyRecord } from "./types.ts";
@@ -54,6 +55,7 @@ import {
 import { keyHash } from "./keys.ts";
 import { SG16_BRAIN_MODEL } from "./client-routes.ts";
 import { freeTokenAllowance } from "./tokens.ts";
+import { visitorTrial, trialRecord, trialDays } from "./trial.ts";
 
 export interface DesignEnv {
   KEYS: KVNamespace;
@@ -68,6 +70,8 @@ export interface DesignEnv {
   EMAIL?: SendEmailBinding;
   EMAIL_FROM?: string;
   FREE_TOKEN_ALLOWANCE?: string;
+  /** Free chat trial without sign-in, in days (default 3, max 7, "0" = off): see trial.ts. */
+  FREE_TRIAL_DAYS?: string;
   SG16_REVOKED_PROJECTS?: string;
   BILLING_SECRET?: string;
   MODEL_NAME?: string;
@@ -864,7 +868,9 @@ export async function designCompatRoute(
     //  3. a signed-in visitor (account token): a pass held on this device is
     //     kept with the account, and a pass the account holds works here too;
     //     without a pass, the account's own one-time free tokens are used.
-    // Not signed in and no pass: asked to sign in (free).
+    // Not signed in and no pass: the free trial (trial.ts) - chat with no
+    // sign-in for FREE_TRIAL_DAYS days, then a pass is required. With the
+    // trial switched off: asked to sign in (free), as before.
     const keyed = await deps.keyAuth(request.headers.get("authorization"));
     if (!keyed && /^Bearer\s+sg16p?_/i.test(request.headers.get("authorization") ?? "")) {
       return json(
@@ -879,7 +885,10 @@ export async function designCompatRoute(
       if (pass) await rememberPass(env, who.email, pass.pass, stored).catch(() => undefined);
       else if (stored) pass = await resolvePass(stored, env);
     }
-    if (!keyed && !pass && !who) {
+    const trial = !keyed && !pass && !who
+      ? await visitorTrial(request.headers.get("cookie"), env.SG16_IDENTITY_SECRET, env.FREE_TRIAL_DAYS)
+      : null;
+    if (trial?.state === "off") {
       return json(
         {
           error: `Sign in free to chat: new accounts get ${freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE).toLocaleString("en-US")} free tokens. Press My Domain (or Sign In in the menu).`,
@@ -891,10 +900,30 @@ export async function designCompatRoute(
         { "X-Chat-Tier": "free" },
       );
     }
+    if (trial?.state === "ended") {
+      // shown as-is in the chat panel's existing error line
+      return json(
+        {
+          error: `Your ${trialDays(env.FREE_TRIAL_DAYS)}-day free trial has ended. Get a pass on the Subscription page to keep chatting.`,
+          trialEnded: true,
+          trialEndsAt: new Date(trial.endsAt).toISOString(),
+          subscribeUrl: "/subscription",
+          tier: "free",
+        },
+        402,
+        { "X-Chat-Tier": "free" },
+      );
+    }
     const record = keyed
-      ?? (pass ? await passKeyRecord(pass.pass, pass.activatedAt) : await accountFreeRecord(who!.email));
+      ?? (pass ? await passKeyRecord(pass.pass, pass.activatedAt)
+        : who ? await accountFreeRecord(who.email)
+        : await trialRecord(request.headers.get("cf-connecting-ip") ?? "unverified-network"));
     const tier = keyed || pass ? "work" : "free";
     const tierHeaders: Record<string, string> = { "X-Chat-Tier": tier };
+    if (trial?.state === "active") {
+      tierHeaders["X-Free-Trial-Ends"] = new Date(trial.endsAt).toISOString();
+      if (trial.setCookie) tierHeaders["Set-Cookie"] = trial.setCookie;
+    }
     // An API project (keyed) gets the brain clean: its message, its own rules
     // (`system`) and its history go through as sent — no SG16 wrapper. The
     // website's visitors get SG16's rules with their recent turns.
