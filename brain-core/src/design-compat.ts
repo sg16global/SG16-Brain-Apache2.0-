@@ -56,6 +56,7 @@ import { keyHash } from "./keys.ts";
 import { SG16_BRAIN_MODEL } from "./client-routes.ts";
 import { freeTokenAllowance } from "./tokens.ts";
 import { visitorTrial, trialRecord, trialDays } from "./trial.ts";
+import { checkHuman, turnstileEnabled, turnstileSiteKey } from "./turnstile.ts";
 
 export interface DesignEnv {
   KEYS: KVNamespace;
@@ -72,6 +73,9 @@ export interface DesignEnv {
   FREE_TOKEN_ALLOWANCE?: string;
   /** Free chat trial without sign-in, in days (default 3, max 7, "0" = off): see trial.ts. */
   FREE_TRIAL_DAYS?: string;
+  /** Cloudflare Turnstile for free-trial chat; off unless both are set (see turnstile.ts). */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
   SG16_REVOKED_PROJECTS?: string;
   BILLING_SECRET?: string;
   MODEL_NAME?: string;
@@ -838,7 +842,7 @@ export async function designCompatRoute(
   // ---- /api/brain: the design's chat panel ------------------------------
   if (path === "/api/brain" && request.method === "GET") {
     const probe = new URL(request.url).searchParams.get("probe");
-    if (probe === "turnstile") return json({ enabled: false, siteKey: null });
+    if (probe === "turnstile") return json({ enabled: turnstileEnabled(env), siteKey: turnstileSiteKey(env) });
     if (probe === "health") {
       const health = await deps.healthProbe();
       if (health.power === false) return json({ ok: false, brain: "off" }, 503);
@@ -924,6 +928,20 @@ export async function designCompatRoute(
         : trial?.state === "active" ? await trialRecord(request.headers.get("cf-connecting-ip") ?? "unverified-network")
         : await accountFreeRecord(who!.email));
     const tier = keyed || pass ? "work" : "free";
+    // free-trial chat: Cloudflare Turnstile, when the owner has switched it on
+    // (turnstile.ts); the trial clock does not start until the check passes
+    let humanToken: string | undefined;
+    if (trial?.state === "active") {
+      const human = await checkHuman({ turnstileToken: body.turnstileToken, humanToken: body.humanToken }, env);
+      if (!human.ok) {
+        return json(
+          { error: "Please complete the quick check below, then send your message again.", turnstileRequired: true, tier },
+          403,
+          { "X-Chat-Tier": tier },
+        );
+      }
+      humanToken = human.humanToken;
+    }
     const tierHeaders: Record<string, string> = { "X-Chat-Tier": tier };
     if (trial?.state === "active") {
       tierHeaders["X-Free-Trial-Ends"] = new Date(trial.endsAt).toISOString();
@@ -961,6 +979,8 @@ export async function designCompatRoute(
         brain: typeof meta.engine === "string" ? meta.engine : "sg16",
         tier,
         ...(freeLeft !== null ? { freeTokensRemaining: freeLeft } : {}),
+        // the panel keeps it in memory and sends it back, so the check is not repeated
+        ...(humanToken ? { humanToken } : {}),
       };
       if (body.stream === true) {
         const ndjson =

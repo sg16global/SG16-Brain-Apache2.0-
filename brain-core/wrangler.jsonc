@@ -83,6 +83,11 @@
     // visitors chat free with no sign-in for this many days (max 7), then
     // need a pass; "0" switches the trial off (sign-in first, as before)
     "FREE_TRIAL_DAYS": "3",
+    // Cloudflare Turnstile for free-trial chat (src/turnstile.ts): off until
+    // BOTH this site key and the TURNSTILE_SECRET_KEY secret are set. Create
+    // the widget in the Cloudflare dashboard (Turnstile -> Add widget,
+    // hostname mistralbrain.com; "Invisible" mode shows no box), then:
+    // "TURNSTILE_SITE_KEY": "0x4AAAA...",
     // the sender of sign-in codes; must match allowed_sender_addresses above
     "EMAIL_FROM": "SG16 Brain <signin@mistralbrain.com>",
     "DODO_TEST_MODE": "false",

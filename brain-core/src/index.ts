@@ -53,6 +53,8 @@ export interface Env {
   SELF_CHECK?: string;           // "true" = second model pass per answer (2x slower); default off
   FREE_TOKEN_ALLOWANCE?: string; // one-time free model tokens per free-tier visitor; then a pass is required
   FREE_TRIAL_DAYS?: string;      // chat with no sign-in for this many days (default 3, max 7, "0" = off); then a pass
+  TURNSTILE_SITE_KEY?: string;   // Cloudflare Turnstile for free-trial chat (turnstile.ts); off unless both are set
+  TURNSTILE_SECRET_KEY?: string; // secret: wrangler secret put TURNSTILE_SECRET_KEY
 
   // billing (Dodo Payments MoR pipeline — see billing-routes.ts)
   DODO_TEST_MODE?: string;
