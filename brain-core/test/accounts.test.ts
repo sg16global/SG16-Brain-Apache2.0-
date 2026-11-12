@@ -390,7 +390,7 @@ test("verify links the device's pass; a shorter pass never replaces a longer one
 });
 
 test("an expired pass on the account falls back to the account's free tokens", async () => {
-  const { e, mail } = env();
+  const { e, mail } = env({ FREE_TRIAL_DAYS: "0" }); // the account ledger, with the free trial off
   const records: Array<{ id: string }> = [];
   const gone = passValue("day", 2 * 86400);
   const token = (await signIn(e, mail, "late@example.com")).body.token as string;

@@ -867,10 +867,12 @@ export async function designCompatRoute(
     //  2. a website visitor with a device pass (verified server-side);
     //  3. a signed-in visitor (account token): a pass held on this device is
     //     kept with the account, and a pass the account holds works here too;
-    //     without a pass, the account's own one-time free tokens are used.
-    // Not signed in and no pass: the free trial (trial.ts) - chat with no
-    // sign-in for FREE_TRIAL_DAYS days, then a pass is required. With the
-    // trial switched off: asked to sign in (free), as before.
+    //     without a pass, the free trial below, then the account's own
+    //     one-time free tokens (when FREE_TOKEN_ALLOWANCE gives any).
+    // No pass, signed in or not: the free trial (trial.ts) - chat for
+    // FREE_TRIAL_DAYS days, then a pass is required. Signing in never ends the
+    // trial early. With the trial switched off: a visitor who is not signed in
+    // is asked to sign in (free), as before.
     const keyed = await deps.keyAuth(request.headers.get("authorization"));
     if (!keyed && /^Bearer\s+sg16p?_/i.test(request.headers.get("authorization") ?? "")) {
       return json(
@@ -885,10 +887,11 @@ export async function designCompatRoute(
       if (pass) await rememberPass(env, who.email, pass.pass, stored).catch(() => undefined);
       else if (stored) pass = await resolvePass(stored, env);
     }
-    const trial = !keyed && !pass && !who
+    const trial = !keyed && !pass
       ? await visitorTrial(request.headers.get("cookie"), env.SG16_IDENTITY_SECRET, env.FREE_TRIAL_DAYS)
       : null;
-    if (trial?.state === "off") {
+    const accountFreeTokens = freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) > 0;
+    if (trial?.state === "off" && !who) {
       return json(
         {
           error: `Sign in free to chat: new accounts get ${freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE).toLocaleString("en-US")} free tokens. Press My Domain (or Sign In in the menu).`,
@@ -900,7 +903,9 @@ export async function designCompatRoute(
         { "X-Chat-Tier": "free" },
       );
     }
-    if (trial?.state === "ended") {
+    // after the trial a signed-in visitor still has the account's free tokens,
+    // when FREE_TOKEN_ALLOWANCE gives any; otherwise a pass is required
+    if (trial?.state === "ended" && (!who || !accountFreeTokens)) {
       // shown as-is in the chat panel's existing error line
       return json(
         {
@@ -916,8 +921,8 @@ export async function designCompatRoute(
     }
     const record = keyed
       ?? (pass ? await passKeyRecord(pass.pass, pass.activatedAt)
-        : who ? await accountFreeRecord(who.email)
-        : await trialRecord(request.headers.get("cf-connecting-ip") ?? "unverified-network"));
+        : trial?.state === "active" ? await trialRecord(request.headers.get("cf-connecting-ip") ?? "unverified-network")
+        : await accountFreeRecord(who!.email));
     const tier = keyed || pass ? "work" : "free";
     const tierHeaders: Record<string, string> = { "X-Chat-Tier": tier };
     if (trial?.state === "active") {
