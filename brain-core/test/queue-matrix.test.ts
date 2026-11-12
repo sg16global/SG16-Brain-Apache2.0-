@@ -92,6 +92,36 @@ test("waiting tickets past their deadline are dropped", () => {
   assert.ok(!poll.granted && poll.expired);
 });
 
+test("priority: pass holders and API projects wait ahead of free chats, first come first served within each group", () => {
+  let now = 1000;
+  const gate = new InferenceGate({ waitBudgetMs: 60000, leaseMs: 90000, staleMs: 10000 }, () => now);
+  const running = gate.acquire();                  // a free chat holds the slot
+  const free1 = gate.acquire(undefined, false);
+  const free2 = gate.acquire(undefined, false);
+  const paid1 = gate.acquire(undefined, true);
+  const paid2 = gate.acquire(undefined, true);
+  assert.ok(running.granted && !free1.granted && !paid1.granted && !paid2.granted);
+  assert.equal(!paid1.granted && paid1.position, 1, "the first paid waiter goes to the front");
+  assert.equal(!paid2.granted && paid2.position, 2, "the second paid waiter queues behind the first");
+  const order: number[] = [];
+  let holder = running.ticket;
+  for (let round = 0; round < 4; round++) {
+    gate.release(holder);
+    now += 200;
+    for (const t of [free1, free2, paid1, paid2]) {
+      if (!order.includes(t.ticket) && gate.poll(t.ticket).granted) { order.push(t.ticket); holder = t.ticket; break; }
+    }
+  }
+  assert.deepEqual(order, [paid1.ticket, paid2.ticket, free1.ticket, free2.ticket]);
+});
+
+test("priority: a paid newcomer never takes a slot that is already running", () => {
+  const gate = new InferenceGate({ waitBudgetMs: 60000, leaseMs: 90000 });
+  const running = gate.acquire(undefined, false);
+  const paid = gate.acquire(undefined, true);
+  assert.ok(running.granted && !paid.granted, "it waits for the running chat to finish");
+});
+
 test("rate limit: fixed minute window, deterministic", () => {
   const row = newRow("k_1", "platform", 1000);
   const ks = new KeyState(row);

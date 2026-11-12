@@ -298,7 +298,8 @@ async function askParsed(
   }
 
   const queueStarted = Date.now();
-  const grant = await acquireSlot(env, maxQueueMs);
+  // pass holders and API projects wait ahead of free-trial and free-token chats
+  const grant = await acquireSlot(env, maxQueueMs, !free && !record.id.startsWith("trial_"));
   if (!grant.granted && grant.off) {
     // the operator switched the brain off (admin BRAIN POWER): nothing is charged
     return await finish(env, ctx, record, "chat", "none", 503, started, 0, false, "E_BRAIN_OFF",
@@ -456,8 +457,8 @@ async function queueDo(env: Env, path: string, body?: unknown): Promise<Record<s
   return (await response.json()) as Record<string, unknown>;
 }
 
-async function acquireSlot(env: Env, maxQueueMs: number): Promise<SlotResult> {
-  const first = await queueDo(env, "/acquire", { waitBudgetMs: maxQueueMs });
+async function acquireSlot(env: Env, maxQueueMs: number, priority = false): Promise<SlotResult> {
+  const first = await queueDo(env, "/acquire", { waitBudgetMs: maxQueueMs, priority });
   if (first.off === true) return { granted: false, ticket: 0, off: true };
   if (first.granted) return { granted: true, ticket: first.ticket as number };
   const ticket = first.ticket as number;

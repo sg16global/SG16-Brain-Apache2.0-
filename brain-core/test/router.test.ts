@@ -47,7 +47,7 @@ function queueNamespace(gate: InferenceGate) {
           return json({ on: power.on });
         }
         if (path === "/acquire" && !power.on) return json({ granted: false, off: true });
-        if (path === "/acquire") return json(gate.acquire(body.waitBudgetMs));
+        if (path === "/acquire") return json(gate.acquire(body.waitBudgetMs, body.priority === true));
         if (path === "/poll") return json(gate.poll(body.ticket));
         if (path === "/release") return json({ released: gate.release(body.ticket) });
         if (path === "/abandon") { gate.abandon(body.ticket); return json({ abandoned: true }); }
