@@ -77,7 +77,9 @@
     "INFERENCE_TIMEOUT_MS": "95000",
     "MAX_QUEUE_WAIT_MS": "120000",
     "SELF_CHECK": "false",
-    "FREE_TOKEN_ALLOWANCE": "10000",
+    // "0": no free tokens for signed-in accounts; after the free trial a pass
+    // is required (owner decision 2026-11-13)
+    "FREE_TOKEN_ALLOWANCE": "0",
     // visitors chat free with no sign-in for this many days (max 7), then
     // need a pass; "0" switches the trial off (sign-in first, as before)
     "FREE_TRIAL_DAYS": "3",
