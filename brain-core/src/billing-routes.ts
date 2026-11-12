@@ -406,12 +406,22 @@ let checkout: CheckoutRow | null = null;
     return legacyJson({ received: true, event: eventType, acted: false, duplicate: true }, 200, null);
   }
 
-  await env.LOGS.batch([
-    env.LOGS.prepare("INSERT INTO passes (token, record, created_at) VALUES (?, ?, ?)")
-      .bind(record.token, JSON.stringify(record), Math.floor(Date.now() / 1000)),
-    env.LOGS.prepare("UPDATE checkouts SET status = 'paid', record_token = ? WHERE ref = ?")
+  // One atomic claim: two success events for the same payment can arrive at
+  // once (Dodo sends payment.succeeded and checkout.session.completed). Only
+  // the event whose UPDATE claims the checkout stores its pass; the other's
+  // INSERT finds a different record_token and stores nothing, so no second,
+  // orphaned valid pass is ever written.
+  const claimed = await env.LOGS.batch([
+    env.LOGS.prepare("UPDATE checkouts SET status = 'paid', record_token = ? WHERE ref = ? AND (status != 'paid' OR record_token IS NULL)")
       .bind(record.token, checkout.ref),
+    env.LOGS.prepare(
+      "INSERT INTO passes (token, record, created_at) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM checkouts WHERE ref = ? AND record_token = ?)",
+    )
+      .bind(record.token, JSON.stringify(record), Math.floor(Date.now() / 1000), checkout.ref, record.token),
   ]);
+  if (!claimed[0]?.meta?.changes) {
+    return legacyJson({ received: true, event: eventType, acted: false, duplicate: true }, 200, null);
+  }
 
   return legacyJson(
     { received: true, event: eventType, acted: true, pass: record.pass, deduped: !seen.meta.changes },
