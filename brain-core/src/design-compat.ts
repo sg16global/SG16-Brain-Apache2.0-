@@ -666,7 +666,8 @@ export async function designCompatRoute(
       if (!result.ok) return json({ ok: false, error: result.error }, result.status);
       const token = await signAccountToken(result.email, env.SG16_IDENTITY_SECRET ?? "");
       const pass = await linkPass(env, result.email, body.pass);
-      const freeLeft = pass || !deps.freeTokens
+      // no free tokens exist when FREE_TOKEN_ALLOWANCE is "0": none are reported
+      const freeLeft = pass || !deps.freeTokens || freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) === 0
         ? null
         : await deps.freeTokens(await accountFreeRecord(result.email)).catch(() => null);
       return json({
@@ -679,7 +680,7 @@ export async function designCompatRoute(
       const who = await signedInAs(request, env);
       if (!who) return json({ ok: false, error: "invalid token" }, 401);
       const pass = await linkPass(env, who.email, body.pass);
-      const freeLeft = pass || !deps.freeTokens
+      const freeLeft = pass || !deps.freeTokens || freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) === 0
         ? null
         : await deps.freeTokens(await accountFreeRecord(who.email)).catch(() => null);
       return json({
@@ -898,7 +899,9 @@ export async function designCompatRoute(
     if (trial?.state === "off" && !who) {
       return json(
         {
-          error: `Sign in free to chat: new accounts get ${freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE).toLocaleString("en-US")} free tokens. Press My Domain (or Sign In in the menu).`,
+          error: accountFreeTokens
+            ? `Sign in free to chat: new accounts get ${freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE).toLocaleString("en-US")} free tokens. Press My Domain (or Sign In in the menu).`
+            : "Get a pass on the Subscription page to chat.",
           signInRequired: true,
           signInUrl: "/login",
           tier: "free",
@@ -997,7 +1000,9 @@ export async function designCompatRoute(
       // "FREE · GET A PASS" chip (which links to /subscription)
       return json(
         {
-          error: "Your free SG16 Brain tokens are used up. Get a pass on the Subscription page to keep chatting.",
+          error: freeTokenAllowance(env.FREE_TOKEN_ALLOWANCE) > 0
+            ? "Your free SG16 Brain tokens are used up. Get a pass on the Subscription page to keep chatting."
+            : "Get a pass on the Subscription page to chat.",
           freeTokensExhausted: true,
           freeTokensRemaining: 0,
           subscribeUrl: "/subscription",

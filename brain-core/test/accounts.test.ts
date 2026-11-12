@@ -410,3 +410,24 @@ test("operator tokens still verify as before (v1), account tokens never pass as 
   assert.equal((await verifyAccountToken(acct, IDENTITY_SECRET))?.email, "sg16global@gmail.com");
   assert.equal(await verifyAccountToken(op, IDENTITY_SECRET), null);
 });
+
+// ---- no free tokens (FREE_TOKEN_ALLOWANCE "0", owner decision 2026-11-13) --------
+
+test("allowance 0: sign-in and the account view report no free-token balance; the messages never promise any", async () => {
+  const { e, mail } = env({ FREE_TOKEN_ALLOWANCE: "0", FREE_TRIAL_DAYS: "0" });
+  const signed = await signIn(e, mail, "zero@example.com");
+  assert.equal(signed.status, 200);
+  assert.equal("freeTokensRemaining" in signed.body, false, "no FREE TOKENS LEFT 0 row in the panel");
+  const me = await identity(e, { action: "me" }, signed.body.token as string);
+  assert.equal("freeTokensRemaining" in me.body, false);
+  // trial off, not signed in: no "new accounts get 0 free tokens"
+  const anon = await chat(e, []);
+  assert.equal(anon.status, 401);
+  assert.doesNotMatch(String(anon.body.error), /free tokens/);
+  assert.match(String(anon.body.error), /pass/);
+
+  // with free tokens on, the balance is still reported, as before
+  const on = env({ FREE_TOKEN_ALLOWANCE: "10000", FREE_TRIAL_DAYS: "0" });
+  const signedOn = await signIn(on.e, on.mail, "ten@example.com");
+  assert.equal(signedOn.body.freeTokensRemaining, 10_000);
+});
