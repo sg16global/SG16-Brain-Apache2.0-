@@ -78,6 +78,9 @@
     "MAX_QUEUE_WAIT_MS": "120000",
     "SELF_CHECK": "false",
     "FREE_TOKEN_ALLOWANCE": "10000",
+    // visitors chat free with no sign-in for this many days (max 7), then
+    // need a pass; "0" switches the trial off (sign-in first, as before)
+    "FREE_TRIAL_DAYS": "3",
     // the sender of sign-in codes; must match allowed_sender_addresses above
     "EMAIL_FROM": "SG16 Brain <signin@mistralbrain.com>",
     "DODO_TEST_MODE": "false",

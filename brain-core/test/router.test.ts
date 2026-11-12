@@ -631,8 +631,8 @@ test("free tier: allowances are per account; one account cannot spend another's"
   assert.equal((await freeChat(env, "hi", "two@example.com")).status, 200, "a different account still has the full allowance");
 });
 
-test("free tier: not signed in and no pass -> sign in first; the model is never called", async () => {
-  const { env } = await makeEnv();
+test("free tier: trial off, not signed in and no pass -> sign in first; the model is never called", async () => {
+  const { env } = await makeEnv({ FREE_TRIAL_DAYS: "0" });
   let calls = 0;
   modelHandler = async () => { calls += 1; return json({ message: { content: "x" } }); };
   const res = await call(env, "/api/brain", "POST", null, { message: "hi" });
@@ -641,6 +641,33 @@ test("free tier: not signed in and no pass -> sign in first; the model is never 
   assert.equal(body.signInRequired, true);
   assert.equal(body.signInUrl, "/login");
   assert.equal(calls, 0);
+});
+
+test("free trial (default 3 days): a visitor chats with no sign-in, under SG16's website rules, not token-metered", async () => {
+  const { env } = await makeEnv({ FREE_TOKEN_ALLOWANCE: "0" });
+  const bodies: ModelBody[] = [];
+  modelHandler = async (_url, init) => {
+    bodies.push(JSON.parse(String(init?.body)) as never);
+    return json({ message: { content: "hello trial" }, prompt_eval_count: 900, eval_count: 900 });
+  };
+  const ask = (cookie?: string) => worker.fetch!(
+    new Request("https://mistralbrain.com/api/brain", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9", ...(cookie ? { cookie } : {}) },
+      body: JSON.stringify({ message: "hi" }),
+    }),
+    env,
+    ctx,
+  );
+  const first = await ask();
+  assert.equal(first.status, 200);
+  assert.equal(((await first.json()) as { assistantMessage: { content: string } }).assistantMessage.content, "hello trial");
+  const cookie = (first.headers.get("set-cookie") ?? "").split(";")[0];
+  assert.match(cookie, /^sg16_trial=v1\./);
+  assert.equal(first.headers.get("X-Free-Tokens-Remaining"), null, "the trial is not metered against free tokens");
+  assert.match(bodies[0].messages?.[0]?.content ?? "", /You are SG16 Brain/, "the website's own rules apply");
+  const second = await ask(cookie);
+  assert.equal(second.status, 200, "free all through the trial, even with the token allowance at 0");
 });
 
 test("free tier: a failed answer is not charged", async () => {
