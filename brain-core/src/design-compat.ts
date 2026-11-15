@@ -934,6 +934,7 @@ export async function designCompatRoute(
     // free-trial chat: Cloudflare Turnstile, when the owner has switched it on
     // (turnstile.ts); the trial clock does not start until the check passes
     let humanToken: string | undefined;
+    let turnstileUsed = false;
     if (trial?.state === "active") {
       const human = await checkHuman({ turnstileToken: body.turnstileToken, humanToken: body.humanToken }, env);
       if (!human.ok) {
@@ -944,6 +945,7 @@ export async function designCompatRoute(
         );
       }
       humanToken = human.humanToken;
+      turnstileUsed = human.turnstileUsed === true;
     }
     const tierHeaders: Record<string, string> = { "X-Chat-Tier": tier };
     if (trial?.state === "active") {
@@ -984,6 +986,8 @@ export async function designCompatRoute(
         ...(freeLeft !== null ? { freeTokensRemaining: freeLeft } : {}),
         // the panel keeps it in memory and sends it back, so the check is not repeated
         ...(humanToken ? { humanToken } : {}),
+        // its Turnstile token is spent: the panel fetches a fresh spare one
+        ...(turnstileUsed ? { turnstileUsed: true } : {}),
       };
       if (body.stream === true) {
         const ndjson =

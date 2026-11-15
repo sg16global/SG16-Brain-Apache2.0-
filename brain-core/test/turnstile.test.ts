@@ -72,7 +72,21 @@ test("checkHuman: no proof is refused while Cloudflare is reachable, and fails o
   resetTurnstileForTests();
   const down = { down: true, calls: 0 };
   assert.deepEqual(await checkHuman({}, ON, cloudflare(down) as never, NOW), { ok: true, skipped: "fail-open" });
-  assert.deepEqual(await checkHuman({ turnstileToken: "good" }, ON, cloudflare(down) as never, NOW), { ok: true, skipped: "fail-open" });
+  assert.deepEqual(await checkHuman({ turnstileToken: "good" }, ON, cloudflare(down) as never, NOW), { ok: true, turnstileUsed: true, skipped: "fail-open" });
+});
+
+test("checkHuman: an expired human token falls back to the spare Turnstile token; a valid one never spends it", async () => {
+  const cf = { calls: 0 };
+  const human = await mintHumanToken(IDENTITY, NOW);
+  // still valid: the spare token is not sent to Cloudflare, so it stays usable
+  assert.deepEqual(await checkHuman({ humanToken: human, turnstileToken: "good" }, ON, cloudflare(cf) as never, NOW + 60_000), { ok: true });
+  assert.equal(cf.calls, 0);
+  // 15 minutes later: the spare proves the visitor again - no refused message
+  const later = await checkHuman({ humanToken: human, turnstileToken: "good" }, ON, cloudflare(cf) as never, NOW + HUMAN_TOKEN_TTL_MS + 1);
+  assert.equal(later.ok, true);
+  assert.equal((later as { turnstileUsed?: boolean }).turnstileUsed, true, "the panel is told to fetch a new spare");
+  assert.ok(await humanTokenValid((later as { humanToken?: string }).humanToken, IDENTITY, NOW + HUMAN_TOKEN_TTL_MS + 2));
+  assert.equal(cf.calls, 1);
 });
 
 test("human tokens cannot be forged, edited or stretched", async () => {
@@ -149,9 +163,11 @@ test("POST /api/brain: with Turnstile on, a trial visitor without proof is asked
     assert.equal(passed.res.status, 200);
     assert.equal(passed.doorCalls(), 1);
     assert.match(String(passed.body.humanToken), /^h1\./, "the panel gets a human token for the next messages");
+    assert.equal(passed.body.turnstileUsed, true, "the panel is told its Turnstile token is spent");
 
     const next = await brain(env(ON), { humanToken: passed.body.humanToken });
     assert.equal(next.res.status, 200);
+    assert.equal(next.body.turnstileUsed, undefined, "a human token alone spends nothing");
   });
 });
 
