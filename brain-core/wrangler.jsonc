@@ -30,7 +30,18 @@
   "assets": {
     "directory": "./client",
     "binding": "ASSETS",
-    "run_worker_first": ["/*"]
+    // Pages, /api, /v1, /rsc and sw.js run the Worker first (www redirect,
+    // security headers, Next.js navigation). The static folders below do NOT:
+    // Cloudflare serves them straight from its edge with the cache headers in
+    // site/_headers, so a page view no longer runs the Worker once per file.
+    "run_worker_first": [
+      "/*",
+      "!/_next/static/*",
+      "!/fonts/*",
+      "!/images/*",
+      "!/icons/*",
+      "!/assets/*"
+    ]
   },
 
   // Fresh storage and database, created by the owner in the NEW account
