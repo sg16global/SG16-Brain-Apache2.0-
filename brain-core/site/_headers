@@ -1,0 +1,48 @@
+# Cache and security headers for the static folders Cloudflare serves
+# directly (wrangler.jsonc: run_worker_first skips these paths). Not served as
+# a file. Pages (HTML), /api, /v1, /rsc and sw.js are answered by the Worker
+# and keep revalidating on every visit, so a deploy is still seen at once.
+#
+# One day fresh, then up to 7 days served from cache while the browser checks
+# for a newer copy in the background. Not "immutable": a chunk was edited in
+# place before (ca2354e), and a one-year cache would hide such an edit.
+
+/_next/static/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+/fonts/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+/images/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+/icons/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+/assets/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()

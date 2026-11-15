@@ -100,8 +100,13 @@ export async function humanTokenValid(token: unknown, secret: string, now = Date
 
 // ------------------------------------------------------------- the check
 
+// turnstileUsed: the visitor's Turnstile token went to Cloudflare (tokens are
+// single-use), so the panel must fetch a fresh one in the background. The
+// panel keeps one spare token next to its human token: when the human token
+// expires (15 minutes), the spare proves the visitor again and the next
+// message goes through instead of being refused once.
 export type HumanCheck =
-  | { ok: true; humanToken?: string; skipped?: "disabled" | "fail-open" }
+  | { ok: true; humanToken?: string; turnstileUsed?: true; skipped?: "disabled" | "fail-open" }
   | { ok: false };
 
 // per isolate: a flood of token-less requests probes Cloudflare at most every 30 s
@@ -134,8 +139,8 @@ export async function checkHuman(
   const token = input.turnstileToken;
   if (typeof token === "string" && token.length > 0 && token.length <= 4096) {
     const outcome = await verifyTurnstileToken(token, secret, fetchImpl);
-    if (outcome === "pass") return { ok: true, humanToken: await mintHumanToken(identity, now) };
-    if (outcome === "error") return { ok: true, skipped: "fail-open" };
+    if (outcome === "pass") return { ok: true, humanToken: await mintHumanToken(identity, now), turnstileUsed: true };
+    if (outcome === "error") return { ok: true, turnstileUsed: true, skipped: "fail-open" };
     return { ok: false };
   }
   // no proof at all: ask for it, unless Cloudflare itself cannot be reached
